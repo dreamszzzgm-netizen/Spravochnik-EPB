@@ -18,26 +18,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
 from app.database.enums import enum_values
-
-
-class OrganizationType(enum.StrEnum):
-    LEGAL_ENTITY = "legal_entity"
-    INDIVIDUAL_ENTREPRENEUR = "individual_entrepreneur"
-    BRANCH = "branch"
-    OTHER = "other"
+from app.modules.organizations.enums import IdentifierType, OrganizationType
 
 
 class ContactType(enum.StrEnum):
     DIRECTOR = "director"
     ACCOUNTANT = "accountant"
     OTHER = "other"
-
-
-class IdentifierType(enum.StrEnum):
-    INN = "inn"
-    KPP = "kpp"
-    OGRN = "ogrn"
-    OGRNIP = "ogrnip"
 
 
 class Organization(Base):

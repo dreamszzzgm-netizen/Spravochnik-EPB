@@ -1,9 +1,8 @@
+from app.modules.organizations.enums import IdentifierType, OrganizationType
 from app.modules.organizations.models import (
-    IdentifierType,
     Organization,
     OrganizationContact,
     OrganizationIdentifier,
-    OrganizationType,
 )
 
 __all__ = [

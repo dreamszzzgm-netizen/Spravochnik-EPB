@@ -22,8 +22,28 @@ from app.modules.organizations.service import (
 
 def test_organization_enum_values_are_lowercase() -> None:
     assert OrganizationType.LEGAL_ENTITY.value == "legal_entity"
+    assert OrganizationType.INDIVIDUAL_ENTREPRENEUR.value == "individual_entrepreneur"
+    assert OrganizationType.BRANCH.value == "branch"
     assert IdentifierType.INN.value == "inn"
+    assert IdentifierType.KPP.value == "kpp"
     assert IdentifierType.OGRN.value == "ogrn"
+    assert IdentifierType.OGRNIP.value == "ogrnip"
+    assert IdentifierType.EXTERNAL_ID.value == "external_id"
+
+
+def test_organization_type_has_no_other() -> None:
+    assert set(OrganizationType.__members__) == {
+        "LEGAL_ENTITY",
+        "INDIVIDUAL_ENTREPRENEUR",
+        "BRANCH",
+    }
+    assert set(IdentifierType.__members__) == {
+        "INN",
+        "KPP",
+        "OGRN",
+        "OGRNIP",
+        "EXTERNAL_ID",
+    }
 
 
 def test_organization_create_schema_defaults() -> None:

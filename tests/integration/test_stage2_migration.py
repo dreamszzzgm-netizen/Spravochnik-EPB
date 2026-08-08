@@ -89,6 +89,32 @@ def test_stage2_migration_builds_organization_schema() -> None:
                 )
                 assert fk_count >= 3
 
+                rows = connection.execute(
+                    text(
+                        "select t.typname, e.enumlabel "
+                        "from pg_type t join pg_enum e on e.enumtypid = t.oid "
+                        "where t.typname in "
+                        "('organization_type', 'contact_type', 'identifier_type') "
+                        "order by t.typname, e.enumsortorder"
+                    )
+                ).all()
+                type_map: dict[str, list[str]] = {}
+                for type_name, label in rows:
+                    type_map.setdefault(type_name, []).append(label)
+                assert type_map["organization_type"] == [
+                    "legal_entity",
+                    "individual_entrepreneur",
+                    "branch",
+                ]
+                assert type_map["contact_type"] == ["director", "accountant", "other"]
+                assert type_map["identifier_type"] == [
+                    "inn",
+                    "kpp",
+                    "ogrn",
+                    "ogrnip",
+                    "external_id",
+                ]
+
                 permission_count = connection.scalar(
                     text(
                         "select count(*) from permissions "
