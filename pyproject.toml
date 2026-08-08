@@ -38,7 +38,7 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-ra --import-mode=importlib"
 markers = [
   "integration: requires PostgreSQL test database",
 ]

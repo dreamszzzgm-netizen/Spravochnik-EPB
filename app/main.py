@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.modules.identity.routes import router as identity_router
+from app.modules.organizations.routes import router as organizations_router
 from app.web.middleware import RequestContextMiddleware
 from app.web.routes.health import router as health_router
 
@@ -19,6 +20,7 @@ app = FastAPI(
 app.add_middleware(RequestContextMiddleware)
 app.include_router(health_router)
 app.include_router(identity_router)
+app.include_router(organizations_router)
 
 
 def run() -> None:
