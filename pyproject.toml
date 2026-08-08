@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "spravoshnik-epb"
+version = "0.0.1"
+description = "Spravoshnik EPB modular monolith"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "fastapi>=0.128,<0.129",
+  "uvicorn[standard]>=0.35,<0.49",
+  "sqlalchemy>=2.0.40,<2.1",
+  "alembic>=1.16,<1.19",
+  "psycopg[binary]>=3.2,<3.4",
+  "pydantic-settings>=2.10,<2.15",
+  "python-multipart>=0.0.20,<0.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4,<10",
+  "pytest-cov>=6.2,<8",
+  "httpx>=0.28,<0.29",
+  "ruff>=0.12,<0.16",
+]
+
+[project.scripts]
+spravoshnik-api = "app.main:run"
+spravoshnik-worker = "app.jobs.worker:run"
+spravoshnik-scheduler = "app.jobs.scheduler:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+  "integration: requires PostgreSQL test database",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
