@@ -1,4 +1,4 @@
-# Spravoshnik EPB — Stage 0 Foundation
+# Spravoshnik EPB — Stage 0/1 Foundation
 
 Технический фундамент Spravoshnik EPB v1.2.
 
@@ -85,3 +85,34 @@ spravoshnik-scheduler
 ```
 
 На Этапе 0 scheduler не создаёт бизнес-задачи: он предоставляет отдельный процесс и инфраструктурную точку расширения для следующих этапов.
+
+
+## Stage 1 — Identity and permissions
+
+Implemented in v0.1.0:
+
+- employees and business function roles;
+- users and Argon2id password hashing;
+- authorization roles/permissions;
+- `user_role_assignments` with `ALL / ASSIGNED / RELATED / OWN`;
+- server-side sessions;
+- login/logout and inactivity timeout;
+- failed-login lockout;
+- administrative session revoke;
+- password reset with forced change;
+- superuser bootstrap;
+- audit events for authentication and administration.
+
+Create the first superuser after migrations:
+
+```bash
+spravoshnik-bootstrap-superuser --username admin --name "Administrator"
+```
+
+For HTTPS deployments set:
+
+```env
+SESSION_COOKIE_SECURE=true
+```
+
+See `STAGE1_ACCEPTANCE.md` for the acceptance checklist.

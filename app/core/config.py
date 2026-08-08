@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     app_env: Literal["development", "test", "production"] = "development"
     app_name: str = "Spravoshnik EPB"
-    app_version: str = "0.0.1"
+    app_version: str = "0.1.0"
 
     database_url: str = Field(
         default="postgresql+psycopg://spravoshnik:spravoshnik@localhost:5432/spravoshnik"
@@ -28,6 +28,13 @@ class Settings(BaseSettings):
 
     worker_poll_interval_seconds: float = Field(default=2.0, gt=0)
     scheduler_tick_seconds: float = Field(default=30.0, gt=0)
+
+    session_absolute_timeout_minutes: int = Field(default=720, ge=5, le=10080)
+    session_inactivity_timeout_minutes: int = Field(default=60, ge=5, le=1440)
+    failed_login_limit: int = Field(default=5, ge=1, le=20)
+    failed_login_lock_minutes: int = Field(default=15, ge=1, le=1440)
+    session_cookie_name: str = "spravoshnik_session"
+    session_cookie_secure: bool = False
 
     @property
     def effective_database_url(self) -> str:

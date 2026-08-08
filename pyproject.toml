@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "spravoshnik-epb"
-version = "0.0.1"
+version = "0.1.0"
 description = "Spravoshnik EPB modular monolith"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
@@ -16,6 +16,7 @@ dependencies = [
   "psycopg[binary]>=3.2,<3.4",
   "pydantic-settings>=2.10,<2.15",
   "python-multipart>=0.0.20,<0.1",
+  "argon2-cffi>=23.1,<26",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +31,7 @@ dev = [
 spravoshnik-api = "app.main:run"
 spravoshnik-worker = "app.jobs.worker:run"
 spravoshnik-scheduler = "app.jobs.scheduler:run"
+spravoshnik-bootstrap-superuser = "app.modules.identity.bootstrap:run"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
@@ -47,6 +49,12 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+  "fastapi.Depends",
+  "app.modules.identity.dependencies.require_permission",
+]
 
 [tool.coverage.run]
 branch = true

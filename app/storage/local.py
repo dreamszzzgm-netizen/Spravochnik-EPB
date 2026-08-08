@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import os
 import tempfile
@@ -49,10 +50,8 @@ class LocalFileStorage:
                 os.fsync(temp_file.fileno())
             os.replace(tmp_name, destination)
         except Exception:
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 os.unlink(tmp_name)
-            except FileNotFoundError:
-                pass
             raise
 
         return StoredObjectInfo(storage_key=key, sha256=digest.hexdigest(), size_bytes=size)
