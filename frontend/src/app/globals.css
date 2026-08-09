@@ -25,6 +25,24 @@
     --ring: 221 83% 45%;
     --radius: 0.5rem;
 
+    /* Семантические роли интерфейса */
+    --semantic-info: 221 83% 40%;
+    --semantic-info-muted: 221 83% 95%;
+    --semantic-success: 142 71% 27%;
+    --semantic-success-muted: 142 71% 94%;
+    --semantic-warning: 32 95% 28%;
+    --semantic-warning-muted: 32 95% 94%;
+    --semantic-danger: 0 72% 40%;
+    --semantic-danger-muted: 0 72% 95%;
+    --entity-contract: 221 83% 45%;
+    --entity-contract-muted: 221 83% 95%;
+    --entity-expertise: 262 65% 48%;
+    --entity-expertise-muted: 262 65% 95%;
+    --entity-task: 32 95% 42%;
+    --entity-task-muted: 32 95% 94%;
+    --entity-document: 199 89% 38%;
+    --entity-document-muted: 199 89% 94%;
+
     /* Графики */
     --chart-1: 221 83% 45%;
     --chart-2: 173 58% 39%;
@@ -108,6 +126,23 @@
     --input: 240 4% 16%;
     --ring: 217 91% 60%;
 
+    --semantic-info: 217 91% 68%;
+    --semantic-info-muted: 221 60% 16%;
+    --semantic-success: 142 71% 58%;
+    --semantic-success-muted: 142 40% 14%;
+    --semantic-warning: 32 95% 62%;
+    --semantic-warning-muted: 32 50% 16%;
+    --semantic-danger: 0 80% 68%;
+    --semantic-danger-muted: 0 40% 18%;
+    --entity-contract: 217 91% 68%;
+    --entity-contract-muted: 221 60% 16%;
+    --entity-expertise: 262 70% 74%;
+    --entity-expertise-muted: 262 45% 17%;
+    --entity-task: 32 95% 62%;
+    --entity-task-muted: 32 50% 16%;
+    --entity-document: 199 89% 65%;
+    --entity-document-muted: 199 50% 16%;
+
     --chart-1: 217 91% 60%;
     --chart-2: 173 58% 50%;
     --chart-3: 32 95% 60%;
@@ -171,6 +206,32 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@media (pointer: coarse) {
+  .interactive-hit-area {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+
+  [data-state] {
+    transition-duration: 1ms !important;
+  }
+
+  .motion-transform {
+    transform: none !important;
+    transition-property: color, background-color, opacity !important;
   }
 }
 

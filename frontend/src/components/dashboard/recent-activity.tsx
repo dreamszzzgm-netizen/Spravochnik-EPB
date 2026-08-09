@@ -22,12 +22,12 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
 };
 
 const TONE: Record<string, string> = {
-  status: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-  create: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  reject: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-  doc: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  comment: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-  task: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  status: "bg-entity-expertise-muted text-entity-expertise",
+  create: "bg-info-muted text-info",
+  reject: "bg-danger-muted text-danger",
+  doc: "bg-success-muted text-success",
+  comment: "bg-entity-document-muted text-entity-document",
+  task: "bg-warning-muted text-warning",
 };
 
 function ArrowRightIcon({ className }: { className?: string }) {
@@ -49,7 +49,7 @@ export function RecentActivity() {
     <Card className="h-full">
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-entity-expertise-muted text-entity-expertise">
             <Activity className="h-4 w-4" />
           </div>
           <div>

@@ -19,7 +19,7 @@ export function BackendStatus() {
   const label = backendStatusLabel(state);
   return (
     <div className="hidden items-center gap-1.5 text-xs text-muted-foreground lg:flex" title={label}>
-      <span className={`h-2 w-2 rounded-full ${state === "online" ? "bg-emerald-500" : state === "offline" ? "bg-rose-500" : "bg-amber-500 animate-pulse"}`} />
+      <span className={`h-2 w-2 rounded-full ${state === "online" ? "bg-success" : state === "offline" ? "bg-danger" : "bg-warning animate-pulse"}`} />
       {label}
     </div>
   );

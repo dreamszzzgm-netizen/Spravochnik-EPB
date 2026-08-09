@@ -100,7 +100,7 @@ export default function HomePage() {
         <Card>
           <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-entity-contract-muted text-entity-contract">
                 <ShieldCheck className="h-4 w-4" />
               </div>
               <div>
@@ -119,7 +119,7 @@ export default function HomePage() {
         <Card>
           <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-entity-expertise-muted text-entity-expertise">
                 <FolderTree className="h-4 w-4" />
               </div>
               <div>
@@ -146,7 +146,7 @@ export default function HomePage() {
         <Card className="lg:col-span-2">
           <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-entity-task-muted text-entity-task">
                 <AlertTriangle className="h-4 w-4" />
               </div>
               <div>
@@ -208,7 +208,7 @@ function SummaryRow({
     <div className="flex items-center justify-between border-b border-dashed border-border/60 pb-2 last:border-b-0 last:pb-0">
       <div>
         <p className="text-sm text-muted-foreground">{label}</p>
-        {sub && <p className="text-[11px] text-muted-foreground/70">{sub}</p>}
+        {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
       </div>
       <p className="text-lg font-semibold tabular-nums text-foreground">{value}</p>
     </div>

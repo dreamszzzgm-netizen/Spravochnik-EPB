@@ -19,12 +19,12 @@ const iconByKind: Record<NotificationKind, React.ComponentType<{ className?: str
 };
 
 const toneByKind: Record<NotificationKind, string> = {
-  task: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  deadline: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  overdue: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-  status: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
-  mention: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
-  control: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  task: "bg-info-muted text-info",
+  deadline: "bg-warning-muted text-warning",
+  overdue: "bg-danger-muted text-danger",
+  status: "bg-entity-expertise-muted text-entity-expertise",
+  mention: "bg-entity-document-muted text-entity-document",
+  control: "bg-success-muted text-success",
 };
 
 function timeAgo(iso: string): string {
@@ -54,13 +54,13 @@ export function NotificationsPopover() {
         >
           <Bell className="h-4 w-4" />
           {unread > 0 && (
-            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
+            <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-semibold text-white">
               {unread}
             </span>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[380px] p-0">
+      <PopoverContent align="end" className="w-[min(380px,calc(100vw-2rem))] p-0">
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <h4 className="text-sm font-semibold">Уведомления</h4>

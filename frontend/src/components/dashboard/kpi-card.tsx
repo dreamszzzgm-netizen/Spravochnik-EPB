@@ -25,9 +25,9 @@ export function KpiCard({
 }) {
   const toneClass = {
     default: "bg-primary/10 text-primary",
-    warning: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-    danger: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
-    success: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+    warning: "bg-warning-muted text-warning",
+    danger: "bg-danger-muted text-danger",
+    success: "bg-success-muted text-success",
   }[tone];
 
   const inner = (
@@ -58,8 +58,8 @@ export function KpiCard({
               <span
                 className={cn(
                   "ml-1.5 inline-flex items-center gap-0.5 font-medium",
-                  delta.trend === "up" && "text-emerald-600 dark:text-emerald-400",
-                  delta.trend === "down" && "text-rose-600 dark:text-rose-400",
+                  delta.trend === "up" && "text-success",
+                  delta.trend === "down" && "text-danger",
                   delta.trend === "flat" && "text-muted-foreground"
                 )}
               >

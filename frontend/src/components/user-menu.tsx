@@ -45,7 +45,7 @@ export function UserMenu() {
           <DropdownMenuItem><LifeBuoy className="mr-2 h-4 w-4" />Поддержка</DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-rose-600 focus:text-rose-600" onSelect={() => void handleLogout()}><LogOut className="mr-2 h-4 w-4" />Выйти</DropdownMenuItem>
+        <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => void handleLogout()}><LogOut className="mr-2 h-4 w-4" />Выйти</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

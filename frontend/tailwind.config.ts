@@ -51,6 +51,40 @@ export default {
         border: "hsl(var(--border) / <alpha-value>)",
         input: "hsl(var(--input) / <alpha-value>)",
         ring: "hsl(var(--ring) / <alpha-value>)",
+        info: {
+          DEFAULT: "hsl(var(--semantic-info) / <alpha-value>)",
+          muted: "hsl(var(--semantic-info-muted) / <alpha-value>)",
+        },
+        success: {
+          DEFAULT: "hsl(var(--semantic-success) / <alpha-value>)",
+          muted: "hsl(var(--semantic-success-muted) / <alpha-value>)",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--semantic-warning) / <alpha-value>)",
+          muted: "hsl(var(--semantic-warning-muted) / <alpha-value>)",
+        },
+        danger: {
+          DEFAULT: "hsl(var(--semantic-danger) / <alpha-value>)",
+          muted: "hsl(var(--semantic-danger-muted) / <alpha-value>)",
+        },
+        entity: {
+          contract: {
+            DEFAULT: "hsl(var(--entity-contract) / <alpha-value>)",
+            muted: "hsl(var(--entity-contract-muted) / <alpha-value>)",
+          },
+          expertise: {
+            DEFAULT: "hsl(var(--entity-expertise) / <alpha-value>)",
+            muted: "hsl(var(--entity-expertise-muted) / <alpha-value>)",
+          },
+          task: {
+            DEFAULT: "hsl(var(--entity-task) / <alpha-value>)",
+            muted: "hsl(var(--entity-task-muted) / <alpha-value>)",
+          },
+          document: {
+            DEFAULT: "hsl(var(--entity-document) / <alpha-value>)",
+            muted: "hsl(var(--entity-document-muted) / <alpha-value>)",
+          },
+        },
         chart: {
           "1": "hsl(var(--chart-1))",
           "2": "hsl(var(--chart-2))",

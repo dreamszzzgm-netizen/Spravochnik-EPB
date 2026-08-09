@@ -90,13 +90,15 @@ export function MyTasksList() {
                     aria-checked={isDone}
                     aria-label={isDone ? "Отменить выполнение" : "Отметить выполненной"}
                     onClick={() => toggle(t.id)}
-                    className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border text-primary transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="task-checkbox-hit-area -m-3 mt-[-10px] inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                   >
-                    {isDone ? (
-                      <Check className="h-3.5 w-3.5" />
-                    ) : (
-                      <Square className="h-3.5 w-3.5 opacity-0" aria-hidden />
-                    )}
+                    <span className="task-checkbox-visual inline-flex h-5 w-5 items-center justify-center rounded border border-border transition-colors hover:bg-muted">
+                      {isDone ? (
+                        <Check className="h-3.5 w-3.5" />
+                      ) : (
+                        <Square className="h-3.5 w-3.5 opacity-0" aria-hidden />
+                      )}
+                    </span>
                   </button>
                   <Link
                     href={`/tasks/${t.id}`}
