@@ -11,6 +11,7 @@ export interface CurrentUserResponse {
   username: string;
   is_superuser: boolean;
   must_change_password: boolean;
+  permissions: string[];
 }
 
 export type OrganizationType = "legal_entity" | "individual_entrepreneur" | "branch";
