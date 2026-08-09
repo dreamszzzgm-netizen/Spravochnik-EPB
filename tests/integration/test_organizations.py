@@ -243,7 +243,8 @@ def test_remove_contact(db: Session, service: OrganizationService, actor: User) 
         is_primary=False,
     )
     service.remove_contact(db, actor_id=actor.id, contact=contact)
-    assert db.get(OrganizationContact, contact.id) is None
+    db.refresh(contact)
+    assert contact.deleted_at is not None
     assert (
         db.scalar(select(AuditEvent).where(AuditEvent.action == "organization.contact_removed"))
         is not None

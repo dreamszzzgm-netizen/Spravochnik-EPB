@@ -195,6 +195,35 @@ def set_primary_contact(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.patch("/{organization_id}/contacts/{contact_id}", response_model=OrganizationContactResponse)
+def update_contact(
+    organization_id: uuid.UUID,
+    contact_id: uuid.UUID,
+    payload: OrganizationContactCreate,
+    actor: User = Depends(require_permission("organizations.manage_contacts")),
+    db: Session = Depends(get_db),
+):
+    organization = _organization_or_404(db, organization_id)
+    contact = get_contact(db, contact_id)
+    if contact is None or contact.organization_id != organization.id:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    if contact.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    contact.contact_type = payload.contact_type
+    contact.full_name = payload.full_name
+    contact.position = payload.position
+    contact.phone = payload.phone
+    contact.email = payload.email
+    if payload.is_primary and not contact.is_primary:
+        for other in list_contacts(db, organization.id):
+            if other.is_primary:
+                other.is_primary = False
+        contact.is_primary = True
+    db.commit()
+    db.refresh(contact)
+    return contact
+
+
 @router.delete("/{organization_id}/contacts/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_contact(
     organization_id: uuid.UUID,
@@ -204,7 +233,7 @@ def delete_contact(
 ):
     organization = _organization_or_404(db, organization_id)
     contact = get_contact(db, contact_id)
-    if contact is None or contact.organization_id != organization.id:
+    if contact is None or contact.organization_id != organization.id or contact.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Contact not found")
     service.remove_contact(db, actor_id=actor.id, contact=contact)
     return None

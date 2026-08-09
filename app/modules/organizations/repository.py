@@ -30,14 +30,16 @@ def list_organizations(
     return list(db.scalars(stmt))
 
 
-def list_contacts(db: Session, organization_id: uuid.UUID) -> list[OrganizationContact]:
+def list_contacts(db: Session, organization_id: uuid.UUID, *, include_deleted: bool = False) -> list[OrganizationContact]:
     stmt = (
         select(OrganizationContact)
         .where(OrganizationContact.organization_id == organization_id)
-        .order_by(
-            OrganizationContact.is_primary.desc(),
-            OrganizationContact.full_name,
-        )
+    )
+    if not include_deleted:
+        stmt = stmt.where(OrganizationContact.deleted_at.is_(None))
+    stmt = stmt.order_by(
+        OrganizationContact.is_primary.desc(),
+        OrganizationContact.full_name,
     )
     return list(db.scalars(stmt))
 

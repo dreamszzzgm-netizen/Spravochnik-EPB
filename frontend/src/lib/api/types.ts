@@ -20,6 +20,7 @@ export interface LoginResponse {
 
 export type OrganizationType = "legal_entity" | "individual_entrepreneur" | "branch";
 export type IdentifierType = "inn" | "kpp" | "ogrn" | "ogrnip" | "external_id";
+export type ContactType = "director" | "chief_engineer" | "pb_specialist" | "accountant" | "other";
 
 export interface OrganizationIdentifierCreate {
   identifier_type: IdentifierType;
@@ -35,6 +36,26 @@ export interface OrganizationIdentifierResponse {
   is_primary: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface OrganizationContactResponse {
+  id: string;
+  organization_id: string;
+  contact_type: ContactType;
+  full_name: string;
+  position: string | null;
+  phone: string | null;
+  email: string | null;
+  is_primary: boolean;
+}
+
+export interface OrganizationContactCreatePayload {
+  contact_type: ContactType;
+  full_name: string;
+  position: string | null;
+  phone: string | null;
+  email: string | null;
+  is_primary: boolean;
 }
 
 export interface OrganizationCreatePayload {

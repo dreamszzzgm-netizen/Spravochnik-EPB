@@ -294,16 +294,15 @@ class OrganizationService:
     def remove_contact(
         self, db: Session, *, actor_id: uuid.UUID, contact: OrganizationContact
     ) -> None:
-        organization_id = contact.organization_id
-        db.delete(contact)
+        contact.deleted_at = self._now()
         write_audit(
             db,
             action="organization.contact_removed",
-            summary="Organization contact removed",
+            summary="Organization contact soft deleted",
             result="success",
             user_id=actor_id,
             entity_type="organization",
-            entity_id=organization_id,
+            entity_id=contact.organization_id,
             metadata={"contact_id": str(contact.id)},
         )
         db.commit()

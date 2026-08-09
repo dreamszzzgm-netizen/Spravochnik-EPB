@@ -3,6 +3,8 @@ import type {
   CurrentUserResponse,
   HealthResponse,
   LoginResponse,
+  OrganizationContactCreatePayload,
+  OrganizationContactResponse,
   OrganizationCreatePayload,
   OrganizationIdentifierResponse,
   OrganizationPaginatedResponse,
@@ -51,3 +53,15 @@ export const updateOrganization = (id: string, payload: OrganizationUpdatePayloa
 
 export const getOrganizationIdentifiers = (id: string, options: ResourceOptions = {}) =>
   apiRequest<OrganizationIdentifierResponse[]>(`/api/organizations/${id}/identifiers`, options);
+
+export const getOrganizationContacts = (id: string, options: ResourceOptions = {}) =>
+  apiRequest<OrganizationContactResponse[]>(`/api/organizations/${id}/contacts`, options);
+
+export const createOrganizationContact = (organizationId: string, payload: OrganizationContactCreatePayload) =>
+  apiRequest<OrganizationContactResponse>(`/api/organizations/${organizationId}/contacts`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const deleteOrganizationContact = (organizationId: string, contactId: string) =>
+  apiRequest<void>(`/api/organizations/${organizationId}/contacts/${contactId}`, { method: "DELETE" });
