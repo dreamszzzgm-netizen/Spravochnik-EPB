@@ -17,12 +17,12 @@ from app.modules.organizations.repository import (
 from app.modules.organizations.schemas import (
     OrganizationContactCreate,
     OrganizationContactResponse,
-    OrganizationCreate,
+    OrganizationCreateWithIdentifiers,
     OrganizationIdentifierCreate,
     OrganizationIdentifierResponse,
     OrganizationPaginatedResponse,
     OrganizationResponse,
-    OrganizationUpdate,
+    OrganizationUpdateWithIdentifiers,
 )
 from app.modules.organizations.service import (
     ContactNotFoundError,
@@ -56,7 +56,7 @@ def read_organizations(
 
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(
-    payload: OrganizationCreate,
+    payload: OrganizationCreateWithIdentifiers,
     actor: User = Depends(require_permission("organizations.create")),
     db: Session = Depends(get_db),
 ):
@@ -74,6 +74,7 @@ def create_organization(
             phone=payload.phone,
             email=payload.email,
             comment=payload.comment,
+            identifiers=[ident.model_dump() for ident in payload.identifiers] if payload.identifiers else None,
         )
     except OrganizationNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -91,7 +92,7 @@ def read_organization(
 @router.patch("/{organization_id}", response_model=OrganizationResponse)
 def update_organization(
     organization_id: uuid.UUID,
-    payload: OrganizationUpdate,
+    payload: OrganizationUpdateWithIdentifiers,
     actor: User = Depends(require_permission("organizations.update")),
     db: Session = Depends(get_db),
 ):
@@ -111,6 +112,7 @@ def update_organization(
             phone=payload.phone,
             email=payload.email,
             comment=payload.comment,
+            identifiers=[ident.model_dump() for ident in payload.identifiers] if payload.identifiers else None,
         )
     except OrganizationNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

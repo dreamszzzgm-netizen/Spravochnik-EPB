@@ -13,6 +13,7 @@ from app.modules.organizations.models import (
 from app.modules.organizations.repository import (
     get_organization,
     list_contacts,
+    list_identifiers,
 )
 
 
@@ -37,6 +38,36 @@ class OrganizationService:
     def _now() -> datetime:
         return datetime.now(UTC)
 
+    def _upsert_identifiers_for_organization(
+        self,
+        db: Session,
+        *,
+        organization: Organization,
+        identifiers: list[dict[str, str | bool]] | None,
+        actor_id: uuid.UUID,
+    ) -> None:
+        if identifiers is None:
+            return
+        existing = {ident.identifier_type: ident for ident in list_identifiers(db, organization.id)}
+        for incoming in identifiers:
+            itype = incoming["identifier_type"]
+            value = incoming["identifier_value"]
+            if itype in existing:
+                ident = existing[itype]
+                ident.identifier_value = value
+                ident.is_primary = incoming.get("is_primary", False)
+                del existing[itype]
+            else:
+                ident = OrganizationIdentifier(
+                    organization_id=organization.id,
+                    identifier_type=itype,
+                    identifier_value=value,
+                    is_primary=incoming.get("is_primary", False),
+                )
+                db.add(ident)
+        for ident in existing.values():
+            self.remove_identifier(db, actor_id=actor_id, identifier=ident)
+
     def create_organization(
         self,
         db: Session,
@@ -52,6 +83,7 @@ class OrganizationService:
         phone: str | None = None,
         email: str | None = None,
         comment: str | None = None,
+        identifiers: list[dict[str, str | bool]] | None = None,
     ) -> Organization:
         if parent_id is not None:
             parent = get_organization(db, parent_id)
@@ -82,6 +114,10 @@ class OrganizationService:
         )
         db.commit()
         db.refresh(organization)
+        self._upsert_identifiers_for_organization(
+            db, organization=organization, identifiers=identifiers, actor_id=actor_id
+        )
+        db.refresh(organization)
         return organization
 
     def update_organization(
@@ -100,6 +136,7 @@ class OrganizationService:
         phone: str | None = None,
         email: str | None = None,
         comment: str | None = None,
+        identifiers: list[dict[str, str | bool]] | None = None,
     ) -> Organization:
         if parent_id is not None and parent_id != organization.id:
             parent = get_organization(db, parent_id)
@@ -147,6 +184,10 @@ class OrganizationService:
             metadata={"changed_fields": changed},
         )
         db.commit()
+        db.refresh(organization)
+        self._upsert_identifiers_for_organization(
+            db, organization=organization, identifiers=identifiers, actor_id=actor_id
+        )
         db.refresh(organization)
         return organization
 

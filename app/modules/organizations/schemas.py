@@ -66,6 +66,20 @@ class OrganizationPaginatedResponse(BaseModel):
     page_size: int
 
 
+class OrganizationIdentifierUpsert(BaseModel):
+    identifier_type: IdentifierType
+    identifier_value: str = Field(min_length=1, max_length=40)
+    is_primary: bool = False
+
+
+class OrganizationCreateWithIdentifiers(OrganizationCreate):
+    identifiers: list[OrganizationIdentifierUpsert] = []
+
+
+class OrganizationUpdateWithIdentifiers(OrganizationUpdate):
+    identifiers: list[OrganizationIdentifierUpsert] | None = None
+
+
 class OrganizationContactCreate(BaseModel):
     contact_type: ContactType = ContactType.OTHER
     full_name: str = Field(min_length=1, max_length=255)
