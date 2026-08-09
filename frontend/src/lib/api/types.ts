@@ -19,6 +19,49 @@ export interface LoginResponse {
 }
 
 export type OrganizationType = "legal_entity" | "individual_entrepreneur" | "branch";
+export type IdentifierType = "inn" | "kpp" | "ogrn" | "ogrnip" | "external_id";
+
+export interface OrganizationIdentifierCreate {
+  identifier_type: IdentifierType;
+  identifier_value: string;
+  is_primary: boolean;
+}
+
+export interface OrganizationIdentifierResponse {
+  id: string;
+  organization_id: string;
+  identifier_type: IdentifierType;
+  identifier_value: string;
+  is_primary: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationCreatePayload {
+  legal_name: string;
+  short_name: string | null;
+  organization_type: OrganizationType;
+  legal_address: string | null;
+  actual_address: string | null;
+  director_name: string | null;
+  phone: string | null;
+  email: string | null;
+  comment: string | null;
+  identifiers: OrganizationIdentifierCreate[];
+}
+
+export interface OrganizationUpdatePayload {
+  legal_name?: string | null;
+  short_name?: string | null;
+  organization_type?: OrganizationType | null;
+  legal_address?: string | null;
+  actual_address?: string | null;
+  director_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  comment?: string | null;
+  identifiers?: OrganizationIdentifierCreate[] | null;
+}
 
 export interface OrganizationResponse {
   id: string;
