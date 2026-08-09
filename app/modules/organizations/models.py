@@ -23,6 +23,8 @@ from app.modules.organizations.enums import IdentifierType, OrganizationType
 
 class ContactType(enum.StrEnum):
     DIRECTOR = "director"
+    CHIEF_ENGINEER = "chief_engineer"
+    PB_SPECIALIST = "pb_specialist"
     ACCOUNTANT = "accountant"
     OTHER = "other"
 
@@ -61,7 +63,7 @@ class OrganizationContact(Base):
         index=True,
     )
     contact_type: Mapped[ContactType] = mapped_column(
-        Enum(ContactType, name="contact_type", values_callable=enum_values),
+        Enum(ContactType, name="contact_type", values_callable=enum_values, create_constraint=False),
         nullable=False,
         default=ContactType.OTHER,
     )

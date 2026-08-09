@@ -49,7 +49,7 @@ def db_session() -> Generator[Session, None, None]:
                 role_permissions, user_role_assignments,
                 user_sessions, password_reset_events, users,
                 employee_function_role_assignments,
-                employees, employee_function_roles
+                employees
             RESTART IDENTITY CASCADE
         """)
         )
