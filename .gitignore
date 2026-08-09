@@ -14,3 +14,4 @@ var/
 .vscode/
 
 .tmp/
+.playwright-cli/
