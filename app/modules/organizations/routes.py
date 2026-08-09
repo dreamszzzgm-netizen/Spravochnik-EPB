@@ -12,7 +12,7 @@ from app.modules.organizations.repository import (
     get_organization,
     list_contacts,
     list_identifiers,
-    list_organizations,
+    list_organizations_paginated,
 )
 from app.modules.organizations.schemas import (
     OrganizationContactCreate,
@@ -20,6 +20,7 @@ from app.modules.organizations.schemas import (
     OrganizationCreate,
     OrganizationIdentifierCreate,
     OrganizationIdentifierResponse,
+    OrganizationPaginatedResponse,
     OrganizationResponse,
     OrganizationUpdate,
 )
@@ -41,12 +42,16 @@ def _organization_or_404(db: Session, organization_id: uuid.UUID, *, include_del
     return organization
 
 
-@router.get("", response_model=list[OrganizationResponse])
+@router.get("", response_model=OrganizationPaginatedResponse)
 def read_organizations(
+    q: str = "",
+    page: int = 1,
+    page_size: int = 20,
     _actor: User = Depends(require_permission("organizations.view")),
     db: Session = Depends(get_db),
 ):
-    return list_organizations(db)
+    items, total = list_organizations_paginated(db, q=q, page=page, page_size=page_size)
+    return OrganizationPaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
@@ -63,6 +68,12 @@ def create_organization(
             short_name=payload.short_name,
             organization_type=payload.organization_type,
             parent_id=payload.parent_id,
+            legal_address=payload.legal_address,
+            actual_address=payload.actual_address,
+            director_name=payload.director_name,
+            phone=payload.phone,
+            email=payload.email,
+            comment=payload.comment,
         )
     except OrganizationNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -94,6 +105,12 @@ def update_organization(
             short_name=payload.short_name,
             organization_type=payload.organization_type,
             parent_id=payload.parent_id,
+            legal_address=payload.legal_address,
+            actual_address=payload.actual_address,
+            director_name=payload.director_name,
+            phone=payload.phone,
+            email=payload.email,
+            comment=payload.comment,
         )
     except OrganizationNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

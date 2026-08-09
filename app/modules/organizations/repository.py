@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.organizations.models import (
@@ -57,3 +57,31 @@ def list_identifiers(db: Session, organization_id: uuid.UUID) -> list[Organizati
 
 def get_identifier(db: Session, identifier_id: uuid.UUID) -> OrganizationIdentifier | None:
     return db.get(OrganizationIdentifier, identifier_id)
+
+
+def list_organizations_paginated(
+    db: Session,
+    *,
+    q: str = "",
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[Organization], int]:
+    stmt = select(Organization).where(Organization.deleted_at.is_(None))
+    if q:
+        pattern = f"%{q}%"
+        stmt = stmt.where(
+            or_(
+                Organization.legal_name.ilike(pattern),
+                Organization.short_name.ilike(pattern),
+            )
+        )
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    offset = max(0, page - 1) * page_size
+    items = list(
+        db.scalars(
+            stmt.order_by(Organization.legal_name.asc())
+            .offset(offset)
+            .limit(page_size)
+        )
+    )
+    return items, total or 0

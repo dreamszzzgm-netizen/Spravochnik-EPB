@@ -15,6 +15,12 @@ class OrganizationBase(BaseModel):
     short_name: str | None = Field(default=None, max_length=120)
     organization_type: OrganizationType = OrganizationType.LEGAL_ENTITY
     parent_id: uuid.UUID | None = None
+    legal_address: str | None = Field(default=None, max_length=500)
+    actual_address: str | None = Field(default=None, max_length=500)
+    director_name: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=64)
+    email: str | None = Field(default=None, max_length=320)
+    comment: str | None = None
 
 
 class OrganizationCreate(OrganizationBase):
@@ -26,6 +32,12 @@ class OrganizationUpdate(BaseModel):
     short_name: str | None = Field(default=None, min_length=1, max_length=120)
     organization_type: OrganizationType | None = None
     parent_id: uuid.UUID | None = None
+    legal_address: str | None = Field(default=None, max_length=500)
+    actual_address: str | None = Field(default=None, max_length=500)
+    director_name: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=64)
+    email: str | None = Field(default=None, max_length=320)
+    comment: str | None = None
 
 
 class OrganizationResponse(BaseModel):
@@ -35,10 +47,23 @@ class OrganizationResponse(BaseModel):
     organization_type: OrganizationType
     legal_name: str
     short_name: str | None
+    legal_address: str | None
+    actual_address: str | None
+    director_name: str | None
+    phone: str | None
+    email: str | None
+    comment: str | None
     parent_id: uuid.UUID | None
     deleted_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class OrganizationPaginatedResponse(BaseModel):
+    items: list[OrganizationResponse]
+    total: int
+    page: int
+    page_size: int
 
 
 class OrganizationContactCreate(BaseModel):

@@ -46,6 +46,12 @@ class OrganizationService:
         short_name: str | None,
         organization_type,
         parent_id: uuid.UUID | None,
+        legal_address: str | None = None,
+        actual_address: str | None = None,
+        director_name: str | None = None,
+        phone: str | None = None,
+        email: str | None = None,
+        comment: str | None = None,
     ) -> Organization:
         if parent_id is not None:
             parent = get_organization(db, parent_id)
@@ -56,6 +62,12 @@ class OrganizationService:
             short_name=short_name,
             organization_type=organization_type,
             parent_id=parent_id,
+            legal_address=legal_address,
+            actual_address=actual_address,
+            director_name=director_name,
+            phone=phone,
+            email=email,
+            comment=comment,
         )
         db.add(organization)
         db.flush()
@@ -82,6 +94,12 @@ class OrganizationService:
         short_name: str | None,
         organization_type,
         parent_id: uuid.UUID | None,
+        legal_address: str | None = None,
+        actual_address: str | None = None,
+        director_name: str | None = None,
+        phone: str | None = None,
+        email: str | None = None,
+        comment: str | None = None,
     ) -> Organization:
         if parent_id is not None and parent_id != organization.id:
             parent = get_organization(db, parent_id)
@@ -100,6 +118,24 @@ class OrganizationService:
         if parent_id != organization.parent_id:
             organization.parent_id = parent_id
             changed.append("parent_id")
+        if legal_address is not None and legal_address != organization.legal_address:
+            organization.legal_address = legal_address
+            changed.append("legal_address")
+        if actual_address is not None and actual_address != organization.actual_address:
+            organization.actual_address = actual_address
+            changed.append("actual_address")
+        if director_name is not None and director_name != organization.director_name:
+            organization.director_name = director_name
+            changed.append("director_name")
+        if phone is not None and phone != organization.phone:
+            organization.phone = phone
+            changed.append("phone")
+        if email is not None and email != organization.email:
+            organization.email = email
+            changed.append("email")
+        if comment is not None and comment != organization.comment:
+            organization.comment = comment
+            changed.append("comment")
         write_audit(
             db,
             action="organization.updated",
