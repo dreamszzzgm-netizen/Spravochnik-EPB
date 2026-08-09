@@ -40,6 +40,12 @@ class Organization(Base):
     )
     legal_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     short_name: Mapped[str | None] = mapped_column(String(120))
+    legal_address: Mapped[str | None] = mapped_column(String(500))
+    actual_address: Mapped[str | None] = mapped_column(String(500))
+    director_name: Mapped[str | None] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(64))
+    email: Mapped[str | None] = mapped_column(String(320))
+    comment: Mapped[str | None] = mapped_column(String)
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
     )
