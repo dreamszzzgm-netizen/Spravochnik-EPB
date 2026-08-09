@@ -12,6 +12,7 @@ build/
 var/
 .idea/
 .vscode/
+docker-compose.override.yml
 
 .tmp/
 .playwright-cli/
