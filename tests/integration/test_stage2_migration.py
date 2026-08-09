@@ -106,7 +106,13 @@ def test_stage2_migration_builds_organization_schema() -> None:
                     "individual_entrepreneur",
                     "branch",
                 ]
-                assert type_map["contact_type"] == ["director", "accountant", "other"]
+                assert type_map["contact_type"] == [
+                    "director",
+                    "accountant",
+                    "other",
+                    "chief_engineer",
+                    "pb_specialist",
+                ]
                 assert type_map["identifier_type"] == [
                     "inn",
                     "kpp",
