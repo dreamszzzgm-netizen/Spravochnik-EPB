@@ -53,9 +53,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refresh();
-    return () => abortRef.current?.abort();
-  }, [refresh]);
+    let cancelled = false;
+    let controller: AbortController | null = null;
+
+    async function load() {
+      controller = new AbortController();
+      abortRef.current = controller;
+      setState({ status: "loading" });
+      try {
+        const user = await getCurrentUser({ signal: controller.signal });
+        if (cancelled) return;
+        setState({
+          status: "authenticated",
+          user,
+          permissions: new Set(user.permissions ?? []),
+        });
+      } catch (error: unknown) {
+        if (cancelled) return;
+        if (error instanceof ApiError) {
+          setState(error.status === 401 ? { status: "unauthenticated" } : error.status === 403 ? { status: "forbidden" } : { status: "offline" });
+        } else {
+          setState({ status: "offline" });
+        }
+      }
+    }
+
+    queueMicrotask(() => { void load(); });
+    return () => {
+      cancelled = true;
+      controller?.abort();
+    };
+  }, []);
 
   const value = useMemo(() => ({ state, refresh, logout }), [state, refresh, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -14,6 +14,10 @@ export interface CurrentUserResponse {
   permissions: string[];
 }
 
+export interface LoginResponse {
+  must_change_password: boolean;
+}
+
 export type OrganizationType = "legal_entity" | "individual_entrepreneur" | "branch";
 
 export interface OrganizationResponse {
