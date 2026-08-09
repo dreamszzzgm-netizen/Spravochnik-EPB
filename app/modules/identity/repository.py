@@ -50,6 +50,22 @@ def permission_scopes(db: Session, user_id: uuid.UUID, permission_code: str) -> 
     return [scope.value for scope in db.scalars(stmt).all()]
 
 
+def get_user_permission_codes(db: Session, user_id: uuid.UUID) -> list[str]:
+    """Возвращает отсортированный список кодов разрешений пользователя через его активные роли."""
+    stmt = (
+        select(Permission.code)
+        .join(RolePermission, RolePermission.permission_id == Permission.id)
+        .join(UserRoleAssignment, UserRoleAssignment.role_id == RolePermission.role_id)
+        .where(
+            UserRoleAssignment.user_id == user_id,
+            UserRoleAssignment.revoked_at.is_(None),
+        )
+        .distinct()
+        .order_by(Permission.code)
+    )
+    return [row for row, in db.execute(stmt)]
+
+
 def active_sessions_for_user(db: Session, user_id: uuid.UUID, now: datetime) -> list[UserSession]:
     stmt = select(UserSession).where(
         UserSession.user_id == user_id,
