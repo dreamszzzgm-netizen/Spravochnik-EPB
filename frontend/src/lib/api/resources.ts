@@ -1,5 +1,5 @@
 import { apiRequest } from "./client";
-import type { CurrentUserResponse, HealthResponse, LoginResponse, OrganizationResponse } from "./types";
+import type { CurrentUserResponse, HealthResponse, LoginResponse, OrganizationPaginatedResponse } from "./types";
 
 type ResourceOptions = { signal?: AbortSignal };
 
@@ -15,5 +15,12 @@ export const changePassword = (currentPassword: string, newPassword: string) =>
     method: "POST",
     body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   });
-export const getOrganizations = (options: ResourceOptions = {}) => apiRequest<OrganizationResponse[]>("/api/organizations", options);
+export const getOrganizations = (params: { q?: string; page?: number; page_size?: number; signal?: AbortSignal } = {}) => {
+  const searchParams = new URLSearchParams();
+  if (params.q) searchParams.set("q", params.q);
+  if (params.page != null) searchParams.set("page", String(params.page));
+  if (params.page_size != null) searchParams.set("page_size", String(params.page_size));
+  const qs = searchParams.toString();
+  return apiRequest<OrganizationPaginatedResponse>(`/api/organizations${qs ? `?${qs}` : ""}`, { signal: params.signal });
+};
 export const logout = () => apiRequest<void>("/api/auth/logout", { method: "POST" });

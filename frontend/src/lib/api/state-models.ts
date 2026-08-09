@@ -17,13 +17,13 @@ export function userMenuModel(
 
 export function organizationStateMessage(
   error: unknown,
-  organizations: unknown[] | null,
-  filteredCount: number,
+  items: unknown[] | null,
+  itemCount: number,
 ): string | null {
   if (error instanceof ApiError && error.status === 401) return "Войдите в систему, чтобы увидеть организации.";
   if (error instanceof ApiError && error.status === 403) return "У вашей учётной записи нет права organizations.view.";
   if (error) return "Не удалось получить организации от backend.";
-  if (organizations === null) return "Загрузка организаций…";
-  if (filteredCount === 0) return "Организации не найдены.";
+  if (items === null) return "Загрузка организаций…";
+  if (itemCount === 0) return "Организации не найдены.";
   return null;
 }

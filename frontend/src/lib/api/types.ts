@@ -25,8 +25,21 @@ export interface OrganizationResponse {
   organization_type: OrganizationType;
   legal_name: string;
   short_name: string | null;
+  legal_address: string | null;
+  actual_address: string | null;
+  director_name: string | null;
+  phone: string | null;
+  email: string | null;
+  comment: string | null;
   parent_id: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface OrganizationPaginatedResponse {
+  items: OrganizationResponse[];
+  total: number;
+  page: number;
+  page_size: number;
 }
