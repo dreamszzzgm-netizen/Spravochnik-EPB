@@ -188,3 +188,32 @@ def test_administrative_reset_forces_change_revokes_sessions_and_never_audits_se
         (event.summary or "") + " " + str(event.metadata_json or {}) for event in audits
     )
     assert temporary not in serialized
+
+
+def test_me_returns_permissions(client, db_session, test_user):
+    """GET /api/auth/me includes permissions list."""
+    login_resp = client.post(
+        "/api/auth/login",
+        json={"username": test_user["username"], "password": test_user["password"]},
+    )
+    token = login_resp.cookies.get("spravoshnik_session")
+    resp = client.get("/api/auth/me", cookies={"spravoshnik_session": token})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "permissions" in body
+    assert isinstance(body["permissions"], list)
+    assert body["username"] == test_user["username"]
+
+
+def test_me_superuser_has_all_permissions(client, db_session, superuser):
+    """Superuser gets all permission codes in /me."""
+    login_resp = client.post(
+        "/api/auth/login",
+        json={"username": superuser["username"], "password": superuser["password"]},
+    )
+    token = login_resp.cookies.get("spravoshnik_session")
+    resp = client.get("/api/auth/me", cookies={"spravoshnik_session": token})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["is_superuser"] is True
+    assert len(body["permissions"]) > 0

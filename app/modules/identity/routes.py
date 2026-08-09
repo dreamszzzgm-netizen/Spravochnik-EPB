@@ -13,6 +13,8 @@ from app.modules.identity.dependencies import (
     get_session_token,
     require_permission,
 )
+from app.modules.identity.repository import get_user_permission_codes
+
 from app.modules.identity.models import (
     Employee,
     EmployeeFunctionRole,
@@ -91,13 +93,18 @@ def logout(
 
 
 @router.get("/auth/me", response_model=CurrentUserResponse)
-def me(user: User = Depends(get_current_user)):
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if user.is_superuser:
+        permissions = db.scalars(select(Permission.code).order_by(Permission.code)).all()
+    else:
+        permissions = get_user_permission_codes(db, user.id)
     return CurrentUserResponse(
         id=user.id,
         employee_id=user.employee_id,
         username=user.username,
         is_superuser=user.is_superuser,
         must_change_password=user.must_change_password,
+        permissions=list(permissions),
     )
 
 

@@ -1,6 +1,23 @@
 import os
+import uuid
+from collections.abc import Generator
 
 import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
+
+from app.database.session import get_db
+from app.main import app
+from app.modules.identity.models import (
+    Employee,
+    Permission,
+    Role,
+    RolePermission,
+    User,
+    UserRoleAssignment,
+)
+from app.modules.identity.security import hash_password
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -13,3 +30,104 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if "integration" in item.keywords:
             item.add_marker(skip_pg)
+
+
+# ---------------------------------------------------------------------------
+# Общие фикстуры для HTTP-интеграционных тестов (используют TestClient)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def db_session() -> Generator[Session, None, None]:
+    """Session SQLAlchemy, управляющая транзакцией в тестовой БД."""
+    engine = create_engine(os.environ["TEST_DATABASE_URL"], pool_pre_ping=True)
+    with engine.begin() as connection:
+        connection.execute(
+            text("""
+            TRUNCATE TABLE
+                audit_events,
+                organization_identifiers, organization_contacts, organizations,
+                role_permissions, user_role_assignments,
+                user_sessions, password_reset_events, users,
+                employee_function_role_assignments,
+                employees, employee_function_roles
+            RESTART IDENTITY CASCADE
+        """)
+        )
+    with Session(engine, expire_on_commit=False) as session:
+        yield session
+    engine.dispose()
+
+
+@pytest.fixture()
+def client(db_session: Session) -> Generator[TestClient, None, None]:
+    """FastAPI TestClient с переопределённой зависимостью get_db."""
+
+    def _override_get_db() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    with TestClient(app) as tc:
+        yield tc
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def test_user(db_session: Session) -> dict[str, object]:
+    """Создаёт обычного пользователя с правом organizations.view."""
+    employee = Employee(full_name="Test User Employee")
+    db_session.add(employee)
+    db_session.flush()
+
+    user = User(
+        employee_id=employee.id,
+        username="testuser",
+        password_hash=hash_password("test-password-123!"),
+        is_active=True,
+        is_superuser=False,
+    )
+    db_session.add(user)
+    db_session.flush()
+
+    # Назначаем роль с разрешением organizations.view
+    role = Role(code="test-org-viewer", name="Test Org Viewer")
+    db_session.add(role)
+    db_session.flush()
+
+    permission = db_session.execute(
+        text("SELECT id FROM permissions WHERE code = 'organizations.view'")
+    ).fetchone()
+    if permission:
+        db_session.add(RolePermission(role_id=role.id, permission_id=permission[0]))
+
+    from app.modules.identity.models import ScopeType
+
+    db_session.add(
+        UserRoleAssignment(
+            user_id=user.id,
+            role_id=role.id,
+            scope_type=ScopeType.ASSIGNED,
+            assigned_by=user.id,
+        )
+    )
+
+    db_session.commit()
+    return {"username": "testuser", "password": "test-password-123!", "id": str(user.id)}
+
+
+@pytest.fixture()
+def superuser(db_session: Session) -> dict[str, object]:
+    """Создаёт суперпользователя."""
+    employee = Employee(full_name="Superuser Employee")
+    db_session.add(employee)
+    db_session.flush()
+
+    user = User(
+        employee_id=employee.id,
+        username="superuser",
+        password_hash=hash_password("super-password-123!"),
+        is_active=True,
+        is_superuser=True,
+    )
+    db_session.add(user)
+    db_session.commit()
+    return {"username": "superuser", "password": "super-password-123!", "id": str(user.id)}

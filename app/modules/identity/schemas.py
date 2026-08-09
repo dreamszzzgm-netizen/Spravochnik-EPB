@@ -21,6 +21,7 @@ class CurrentUserResponse(BaseModel):
     username: str
     is_superuser: bool
     must_change_password: bool
+    permissions: list[str]
 
 
 class EmployeeCreate(BaseModel):
