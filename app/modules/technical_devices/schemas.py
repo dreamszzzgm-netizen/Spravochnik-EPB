@@ -14,19 +14,14 @@ class TechnicalDeviceCreate(BaseModel):
     organization_id: uuid.UUID
 
 
-_UNSET = object()
-
 class TechnicalDeviceUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     device_type: TechnicalDeviceType | None = None
-    serial_number: str | None = Field(default=_UNSET)
-    opo_id: uuid.UUID | None = Field(default=_UNSET)
+    serial_number: str | None = None
+    opo_id: uuid.UUID | None = None
     organization_id: uuid.UUID | None = None
-
-    def model_post_init(self, __context):
-        pass
 
 
 class TechnicalDeviceResponse(BaseModel):

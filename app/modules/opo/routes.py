@@ -109,6 +109,7 @@ def update_opo(
             hazard_sign_ids=payload.hazard_sign_ids,
             activity_type_ids=payload.activity_type_ids,
             comment=payload.comment,
+            comment_provided="comment" in payload.model_fields_set,
         )
         return service.get_opo_detail(db, opo.id)
     except OPONotFoundError as exc:

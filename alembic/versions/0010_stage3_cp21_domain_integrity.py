@@ -56,8 +56,9 @@ def upgrade() -> None:
     # 3. Add comment to OPO
     op.add_column("opo", sa.Column("comment", sa.Text(), nullable=True))
 
-    # 4. Backfill organization_id from OPO for linked devices/buildings
+    # 4. Preflight: validate data before any backfill
     for table in ["technical_devices", "buildings"]:
+        # Check for dangling OPO references
         orphan_rows = conn.execute(
             text(
                 f"SELECT {table}.id FROM {table} "
@@ -72,17 +73,48 @@ def upgrade() -> None:
                 "Cannot backfill organization_id. Fix data first."
             )
 
-        standalone_count = conn.execute(
-            text(f"SELECT COUNT(*) FROM {table} WHERE opo_id IS NULL")
-        ).scalar()
-        if standalone_count and standalone_count > 0:
+        # Check for ambiguous ownership (owner != operator)
+        ambiguous = conn.execute(
+            text(
+                f"SELECT {table}.id, {table}.opo_id, "
+                f"opo.owner_organization_id, opo.operating_organization_id "
+                f"FROM {table} "
+                f"JOIN opo ON opo.id = {table}.opo_id "
+                f"WHERE opo.owner_organization_id != opo.operating_organization_id"
+            )
+        ).fetchall()
+        if ambiguous:
+            details = []
+            for row in ambiguous[:10]:
+                details.append(
+                    f"  id={row[0]} opo_id={row[1]} "
+                    f"owner={row[2]} operator={row[3]}"
+                )
             raise ValueError(
-                f"{table} has {standalone_count} standalone rows (opo_id IS NULL). "
-                "Cannot backfill organization_id automatically. "
-                "Assign an organization to every standalone device/building "
-                "before upgrading."
+                f"{table} has {len(ambiguous)} row(s) linked to OPOs where "
+                f"owner != operator. "
+                "Cannot determine the correct organization automatically. "
+                "Assign organization_id manually before upgrading.\n" +
+                "\n".join(details)
             )
 
+        # Check for standalone rows (no OPO)
+        standalone = conn.execute(
+            text(f"SELECT id FROM {table} WHERE opo_id IS NULL")
+        ).fetchall()
+        if standalone:
+            details = [f"  id={row[0]}" for row in standalone[:10]]
+            raise ValueError(
+                f"{table} has {len(standalone)} standalone row(s) "
+                f"(opo_id IS NULL). "
+                "Cannot backfill organization_id automatically. "
+                "Assign an organization to every standalone device/building "
+                "before upgrading.\n" +
+                "\n".join(details)
+            )
+
+    # 5. Safe backfill (all preflight checks passed, owner == operator)
+    for table in ["technical_devices", "buildings"]:
         conn.execute(
             text(
                 f"UPDATE {table} SET organization_id = opo.owner_organization_id "
@@ -90,75 +122,66 @@ def upgrade() -> None:
             )
         )
 
-    # 5. Now set NOT NULL on organization_id
+    # 6. Now set NOT NULL on organization_id
     op.alter_column("technical_devices", "organization_id", nullable=False)
     op.alter_column("buildings", "organization_id", nullable=False)
 
-    # 6. Fix FK cascade for migration 0009: add ON UPDATE CASCADE
-    conn.execute(
-        text("""
-        ALTER TABLE opo_hazard_signs
-        DROP CONSTRAINT IF EXISTS opo_hazard_signs_hazard_sign_id_fkey
-    """)
-    )
-    conn.execute(
-        text("""
-        ALTER TABLE opo_hazard_signs
-        ADD CONSTRAINT opo_hazard_signs_hazard_sign_id_fkey
-        FOREIGN KEY (hazard_sign_id) REFERENCES hazard_signs(id)
-        ON DELETE RESTRICT ON UPDATE CASCADE
-    """)
-    )
-    conn.execute(
-        text("""
-        ALTER TABLE opo_activity_types
-        DROP CONSTRAINT IF EXISTS opo_activity_types_activity_type_id_fkey
-    """)
-    )
-    conn.execute(
-        text("""
-        ALTER TABLE opo_activity_types
-        ADD CONSTRAINT opo_activity_types_activity_type_id_fkey
-        FOREIGN KEY (activity_type_id) REFERENCES activity_types(id)
-        ON DELETE RESTRICT ON UPDATE CASCADE
-    """)
-    )
+    # 7. Ensure FK cascade on junction tables (idempotent for both old and new 0009)
+    for table, fk_col, ref_table, fk_name in [
+        ("opo_hazard_signs", "hazard_sign_id", "hazard_signs",
+         "opo_hazard_signs_hazard_sign_id_fkey"),
+        ("opo_activity_types", "activity_type_id", "activity_types",
+         "opo_activity_types_activity_type_id_fkey"),
+    ]:
+        conn.execute(
+            text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {fk_name}")
+        )
+        conn.execute(
+            text(
+                f"ALTER TABLE {table} ADD CONSTRAINT {fk_name} "
+                f"FOREIGN KEY ({fk_col}) REFERENCES {ref_table}(id) "
+                f"ON DELETE RESTRICT ON UPDATE CASCADE"
+            )
+        )
 
 
 def downgrade() -> None:
     conn = op.get_bind()
 
     conn.execute(
-        text("""
-        ALTER TABLE opo_hazard_signs
-        DROP CONSTRAINT IF EXISTS opo_hazard_signs_hazard_sign_id_fkey
-    """)
+        text(
+            "ALTER TABLE opo_hazard_signs "
+            "DROP CONSTRAINT IF EXISTS opo_hazard_signs_hazard_sign_id_fkey"
+        )
     )
     conn.execute(
-        text("""
-        ALTER TABLE opo_hazard_signs
-        ADD CONSTRAINT opo_hazard_signs_hazard_sign_id_fkey
-        FOREIGN KEY (hazard_sign_id) REFERENCES hazard_signs(id)
-        ON DELETE RESTRICT ON UPDATE RESTRICT
-    """)
+        text(
+            "ALTER TABLE opo_hazard_signs "
+            "ADD CONSTRAINT opo_hazard_signs_hazard_sign_id_fkey "
+            "FOREIGN KEY (hazard_sign_id) REFERENCES hazard_signs(id) "
+            "ON DELETE RESTRICT ON UPDATE RESTRICT"
+        )
     )
     conn.execute(
-        text("""
-        ALTER TABLE opo_activity_types
-        DROP CONSTRAINT IF EXISTS opo_activity_types_activity_type_id_fkey
-    """)
+        text(
+            "ALTER TABLE opo_activity_types "
+            "DROP CONSTRAINT IF EXISTS opo_activity_types_activity_type_id_fkey"
+        )
     )
     conn.execute(
-        text("""
-        ALTER TABLE opo_activity_types
-        ADD CONSTRAINT opo_activity_types_activity_type_id_fkey
-        FOREIGN KEY (activity_type_id) REFERENCES activity_types(id)
-        ON DELETE RESTRICT ON UPDATE RESTRICT
-    """)
+        text(
+            "ALTER TABLE opo_activity_types "
+            "ADD CONSTRAINT opo_activity_types_activity_type_id_fkey "
+            "FOREIGN KEY (activity_type_id) REFERENCES activity_types(id) "
+            "ON DELETE RESTRICT ON UPDATE RESTRICT"
+        )
     )
 
     conn.execute(
-        text("""ALTER TABLE buildings DROP CONSTRAINT IF EXISTS fk_buildings_organization_id""")
+        text(
+            "ALTER TABLE buildings "
+            "DROP CONSTRAINT IF EXISTS fk_buildings_organization_id"
+        )
     )
     conn.execute(
         text(
@@ -174,3 +197,4 @@ def downgrade() -> None:
     op.drop_column("buildings", "organization_id")
 
     op.drop_column("opo", "comment")
+

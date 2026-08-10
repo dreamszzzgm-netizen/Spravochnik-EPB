@@ -16,7 +16,6 @@ from app.modules.opo.repository import (
     list_opo_activity_types,
     list_opo_hazard_signs,
 )
-from app.modules.opo.schemas import _UNSET
 from app.modules.organizations.repository import get_organization
 
 
@@ -122,7 +121,8 @@ class OPOService:
         operating_organization_id: uuid.UUID | None = None,
         hazard_sign_ids: list[uuid.UUID] | None = None,
         activity_type_ids: list[uuid.UUID] | None = None,
-        comment: str | None = _UNSET,
+        comment: str | None = None,
+        comment_provided: bool = False,
     ) -> OPO:
         changed: list[str] = []
 
@@ -202,7 +202,7 @@ class OPOService:
                 db.add(OPOActivityType(opo_id=opo.id, activity_type_id=type_id))
             changed.append("activity_types")
 
-        if comment is not _UNSET and comment != opo.comment:
+        if comment_provided and comment != opo.comment:
             opo.comment = comment
             changed.append("comment")
 

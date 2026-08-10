@@ -21,9 +21,6 @@ class OPOActivityTypeResponse(BaseModel):
     name: str
 
 
-_UNSET = object()
-
-
 class OPOCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     registration_number: str = Field(min_length=1, max_length=100)
@@ -49,10 +46,7 @@ class OPOUpdate(BaseModel):
     operating_organization_id: uuid.UUID | None = None
     hazard_sign_ids: list[uuid.UUID] | None = None
     activity_type_ids: list[uuid.UUID] | None = None
-    comment: str | None = Field(default=_UNSET)
-
-    def model_post_init(self, __context):
-        pass
+    comment: str | None = None
 
 
 class OPOResponse(BaseModel):

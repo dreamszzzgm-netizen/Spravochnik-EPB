@@ -87,6 +87,7 @@ def update_building(
             name=payload.name,
             building_type=payload.building_type,
             opo_id=payload.opo_id,
+            opo_id_provided="opo_id" in payload.model_fields_set,
             organization_id=payload.organization_id,
         )
     except BuildingNotFoundError as exc:

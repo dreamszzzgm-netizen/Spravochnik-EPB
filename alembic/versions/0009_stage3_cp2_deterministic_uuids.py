@@ -37,6 +37,25 @@ def _update_ids(conn, table: str, code_id_pairs: list[tuple[str, str]]) -> None:
 
 def upgrade() -> None:
     conn = op.get_bind()
+
+    # Before changing PKs, make junction FKs CASCADE so existing N:M rows survive
+    for table, fk_col, ref_table, fk_name in [
+        ("opo_hazard_signs", "hazard_sign_id", "hazard_signs",
+         "opo_hazard_signs_hazard_sign_id_fkey"),
+        ("opo_activity_types", "activity_type_id", "activity_types",
+         "opo_activity_types_activity_type_id_fkey"),
+    ]:
+        conn.execute(
+            text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {fk_name}")
+        )
+        conn.execute(
+            text(
+                f"ALTER TABLE {table} ADD CONSTRAINT {fk_name} "
+                f"FOREIGN KEY ({fk_col}) REFERENCES {ref_table}(id) "
+                f"ON DELETE RESTRICT ON UPDATE CASCADE"
+            )
+        )
+
     hazard_pairs = [(code, _uuid5(code)) for code in [
         "flammable", "oxidizing", "combustible", "explosive",
         "toxic", "highly_toxic", "environmental",
@@ -50,3 +69,4 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     pass
+

@@ -98,7 +98,9 @@ def update_device(
             name=payload.name,
             device_type=payload.device_type,
             serial_number=payload.serial_number,
+            serial_number_provided="serial_number" in payload.model_fields_set,
             opo_id=payload.opo_id,
+            opo_id_provided="opo_id" in payload.model_fields_set,
             organization_id=payload.organization_id,
         )
     except TechnicalDeviceNotFoundError as exc:

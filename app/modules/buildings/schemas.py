@@ -13,19 +13,13 @@ class BuildingCreate(BaseModel):
     organization_id: uuid.UUID
 
 
-_UNSET = object()
-
-
 class BuildingUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     building_type: BuildingType | None = None
-    opo_id: uuid.UUID | None = Field(default=_UNSET)
+    opo_id: uuid.UUID | None = None
     organization_id: uuid.UUID | None = None
-
-    def model_post_init(self, __context):
-        pass
 
 
 class BuildingResponse(BaseModel):

@@ -800,3 +800,22 @@ class TestDeterministicUUID:
         for sign in signs:
             expected = uuid.uuid5(STAGE3_NS, sign.code)
             assert sign.id == expected, f"UUID mismatch for code={sign.code}"
+
+
+class TestOpenAPI:
+    def test_openapi_json_generates_without_errors(self, client: TestClient):
+        resp = client.get("/openapi.json")
+        assert resp.status_code == 200, resp.text
+        schema = resp.json()
+        assert "paths" in schema
+
+        # Verify no _UNSET object in request schemas
+        schemas = schema.get("components", {}).get("schemas", {})
+        for name, s in schemas.items():
+            if "Update" in name or "Patch" in name:
+                props = s.get("properties", {})
+                for prop_name, prop in props.items():
+                    default = prop.get("default")
+                    assert not isinstance(default, object) if default is not None else True, (
+                        f"{name}.{prop_name} default should not be an object"
+                    )
