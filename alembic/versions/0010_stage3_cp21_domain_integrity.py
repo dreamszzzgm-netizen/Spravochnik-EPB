@@ -56,9 +56,8 @@ def upgrade() -> None:
     # 3. Add comment to OPO
     op.add_column("opo", sa.Column("comment", sa.Text(), nullable=True))
 
-    # 4. Preflight: validate data before any backfill
+    # 4. Preflight: validate data integrity (dangling OPO references only)
     for table in ["technical_devices", "buildings"]:
-        # Check for dangling OPO references
         orphan_rows = conn.execute(
             text(
                 f"SELECT {table}.id FROM {table} "
@@ -73,47 +72,7 @@ def upgrade() -> None:
                 "Cannot backfill organization_id. Fix data first."
             )
 
-        # Check for ambiguous ownership (owner != operator)
-        ambiguous = conn.execute(
-            text(
-                f"SELECT {table}.id, {table}.opo_id, "
-                f"opo.owner_organization_id, opo.operating_organization_id "
-                f"FROM {table} "
-                f"JOIN opo ON opo.id = {table}.opo_id "
-                f"WHERE opo.owner_organization_id != opo.operating_organization_id"
-            )
-        ).fetchall()
-        if ambiguous:
-            details = []
-            for row in ambiguous[:10]:
-                details.append(
-                    f"  id={row[0]} opo_id={row[1]} "
-                    f"owner={row[2]} operator={row[3]}"
-                )
-            raise ValueError(
-                f"{table} has {len(ambiguous)} row(s) linked to OPOs where "
-                f"owner != operator. "
-                "Cannot determine the correct organization automatically. "
-                "Assign organization_id manually before upgrading.\n"
-                + "\n".join(details)
-            )
-
-        # Check for standalone rows (no OPO)
-        standalone = conn.execute(
-            text(f"SELECT id FROM {table} WHERE opo_id IS NULL")
-        ).fetchall()
-        if standalone:
-            details = [f"  id={row[0]}" for row in standalone[:10]]
-            raise ValueError(
-                f"{table} has {len(standalone)} standalone row(s) "
-                f"(opo_id IS NULL). "
-                "Cannot backfill organization_id automatically. "
-                "Assign an organization to every standalone device/building "
-                "before upgrading.\n"
-                + "\n".join(details)
-            )
-
-    # 5. Safe backfill (all preflight checks passed, owner == operator)
+    # 5. Safe backfill: use owner_organization_id as deterministic source
     for table in ["technical_devices", "buildings"]:
         conn.execute(
             text(
@@ -122,9 +81,7 @@ def upgrade() -> None:
             )
         )
 
-    # 6. Now set NOT NULL on organization_id
-    op.alter_column("technical_devices", "organization_id", nullable=False)
-    op.alter_column("buildings", "organization_id", nullable=False)
+    # 6. organization_id stays nullable — standalone TD/Building are valid
 
     # 7. Ensure FK cascade on junction tables (idempotent for both old and new 0009)
     for table, fk_col, ref_table, fk_name in [

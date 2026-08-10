@@ -79,6 +79,8 @@ def update_building(
     db: Session = Depends(get_db),
 ):
     building = _building_or_404(db, building_id)
+    if "organization_id" in payload.model_fields_set and payload.organization_id is None:
+        raise HTTPException(status_code=422, detail="organization_id cannot be null")
     try:
         return service.update_building(
             db,
@@ -89,6 +91,7 @@ def update_building(
             opo_id=payload.opo_id,
             opo_id_provided="opo_id" in payload.model_fields_set,
             organization_id=payload.organization_id,
+            organization_id_provided="organization_id" in payload.model_fields_set,
         )
     except BuildingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

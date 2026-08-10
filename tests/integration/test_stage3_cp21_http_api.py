@@ -365,6 +365,321 @@ class TestPATCHSemantics:
         assert resp.status_code == 200
         assert resp.json()["opo_id"] is None, "explicit opo_id=null must clear OPO association"
 
+    def test_patch_td_org_omitted_preserves(self, client: TestClient, superuser: dict):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "PATCH-ORG-PRES Org", "POPR")
+        device = _create_device(
+            client, token, "OrgDevice", organization_id=org["id"]
+        )
+        resp = client.patch(
+            f"/api/technical-devices/{device['id']}",
+            json={"name": "RenamedOnly"},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["organization_id"] == org["id"], (
+            "organization_id must be preserved when omitted in PATCH"
+        )
+
+    def test_patch_td_org_null_rejected(self, client: TestClient, superuser: dict):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "PATCH-ORG-REJ Org", "PORJ")
+        device = _create_device(
+            client, token, "OrgDevice", organization_id=org["id"]
+        )
+        resp = client.patch(
+            f"/api/technical-devices/{device['id']}",
+            json={"organization_id": None},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 422, (
+            f"explicit organization_id=null must be rejected, got {resp.status_code}"
+        )
+
+    def test_patch_td_org_new_value(self, client: TestClient, superuser: dict):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org_a = _create_org(client, token, "ORG-A", "ORG_A")
+        org_b = _create_org(client, token, "ORG-B", "ORG_B")
+        device = _create_device(
+            client, token, "OrgDevice", organization_id=org_a["id"]
+        )
+        resp = client.patch(
+            f"/api/technical-devices/{device['id']}",
+            json={"organization_id": org_b["id"]},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["organization_id"] == org_b["id"], (
+            "explicit organization_id must replace value"
+        )
+
+    def test_patch_building_org_omitted_preserves(self, client: TestClient, superuser: dict):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "PATCH-BORG-PRES Org", "PBPR")
+        building = _create_building(
+            client, token, "OrgBuilding", organization_id=org["id"]
+        )
+        resp = client.patch(
+            f"/api/buildings/{building['id']}",
+            json={"name": "RenamedOnly"},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["organization_id"] == org["id"], (
+            "organization_id must be preserved when omitted in PATCH"
+        )
+
+    def test_patch_building_org_null_rejected(self, client: TestClient, superuser: dict):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "PATCH-BORG-REJ Org", "PBRJ")
+        building = _create_building(
+            client, token, "OrgBuilding", organization_id=org["id"]
+        )
+        resp = client.patch(
+            f"/api/buildings/{building['id']}",
+            json={"organization_id": None},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 422, (
+            f"explicit organization_id=null must be rejected, got {resp.status_code}"
+        )
+
+    def test_patch_building_org_new_value(self, client: TestClient, superuser: dict):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org_a = _create_org(client, token, "BLD-ORG-A", "BOGA")
+        org_b = _create_org(client, token, "BLD-ORG-B", "BOGB")
+        building = _create_building(
+            client, token, "OrgBuilding", organization_id=org_a["id"]
+        )
+        resp = client.patch(
+            f"/api/buildings/{building['id']}",
+            json={"organization_id": org_b["id"]},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["organization_id"] == org_b["id"], (
+            "explicit organization_id must replace value"
+        )
+
+    def test_create_td_without_org_rejected(self, client: TestClient, superuser: dict):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        _create_org(client, token, "TD-NoOrg", "TDNO")
+        resp = client.post(
+            "/api/technical-devices",
+            json={"name": "NoOrgDevice", "device_type": "other"},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 422, (
+            f"create TD without organization_id must be rejected, got {resp.status_code}"
+        )
+
+    def test_create_building_without_org_rejected(self, client: TestClient, superuser: dict):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        _create_org(client, token, "Bld-NoOrg", "BLNO")
+        resp = client.post(
+            "/api/buildings",
+            json={"name": "NoOrgBuilding", "building_type": "other"},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 422, (
+            f"create Building without organization_id must be rejected, got {resp.status_code}"
+        )
+
+    def test_standalone_td_with_org_allowed(self, client: TestClient, superuser: dict):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "StandaloneTD Org", "STDO")
+        device = _create_device(
+            client, token, "StandaloneDevice", organization_id=org["id"]
+        )
+        resp = client.get(
+            f"/api/technical-devices/{device['id']}",
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["opo_id"] is None, (
+            "standalone TD with organization and opo_id=null must be allowed"
+        )
+        assert resp.json()["organization_id"] == org["id"]
+
+    def test_standalone_building_with_org_allowed(self, client: TestClient, superuser: dict):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "StandaloneBld Org", "SBLO")
+        building = _create_building(
+            client, token, "StandaloneBuilding", organization_id=org["id"]
+        )
+        resp = client.get(
+            f"/api/buildings/{building['id']}",
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["opo_id"] is None, (
+            "standalone Building with organization and opo_id=null must be allowed"
+        )
+        assert resp.json()["organization_id"] == org["id"]
+
+
+# ---------------------------------------------------------------------------
+# N:M PATCH semantics — hazard_sign_ids and activity_type_ids
+# ---------------------------------------------------------------------------
+class TestNMPatchSemantics:
+    def test_patch_opo_hazard_sign_omitted_preserves(
+        self, client: TestClient, superuser: dict
+    ):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "NM-HS-OMIT Org", "NHSO")
+
+        ref = client.get(
+            "/api/reference/hazard-signs",
+            cookies={"spravoshnik_session": token},
+        ).json()
+        hs_id = ref[0]["id"]
+
+        opo = _create_opos(
+            client, token, org["id"], "NM-HS-OMIT-001", hazard_sign_ids=[hs_id]
+        )
+        assert len(opo.get("hazard_signs", [])) == 1
+
+        resp = client.patch(
+            f"/api/opo/{opo['id']}",
+            json={"name": "RenamedHazardSignOmitted"},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert len(resp.json()["hazard_signs"]) == 1, (
+            "hazard_signs must be preserved when omitted in PATCH"
+        )
+
+    def test_patch_opo_hazard_sign_empty_clears(
+        self, client: TestClient, superuser: dict
+    ):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "NM-HS-CLR Org", "NHSC")
+
+        ref = client.get(
+            "/api/reference/hazard-signs",
+            cookies={"spravoshnik_session": token},
+        ).json()
+        hs_id = ref[0]["id"]
+
+        opo = _create_opos(
+            client, token, org["id"], "NM-HS-CLR-001", hazard_sign_ids=[hs_id]
+        )
+        assert len(opo.get("hazard_signs", [])) == 1
+
+        resp = client.patch(
+            f"/api/opo/{opo['id']}",
+            json={"hazard_sign_ids": []},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert len(resp.json()["hazard_signs"]) == 0, (
+            "hazard_sign_ids=[] must explicitly clear all hazard signs"
+        )
+
+    def test_patch_opo_hazard_sign_new_values(
+        self, client: TestClient, superuser: dict
+    ):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "NM-HS-SET Org", "NHSS")
+
+        ref = client.get(
+            "/api/reference/hazard-signs",
+            cookies={"spravoshnik_session": token},
+        ).json()
+
+        opo = _create_opos(
+            client, token, org["id"], "NM-HS-SET-001", hazard_sign_ids=[ref[0]["id"]]
+        )
+
+        resp = client.patch(
+            f"/api/opo/{opo['id']}",
+            json={"hazard_sign_ids": [ref[1]["id"]]},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        signs = resp.json()["hazard_signs"]
+        assert len(signs) == 1, "should replace hazard signs"
+        assert signs[0]["id"] == ref[1]["id"], "should contain new hazard sign"
+
+    def test_patch_opo_activity_type_omitted_preserves(
+        self, client: TestClient, superuser: dict
+    ):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "NM-AT-OMIT Org", "NATO")
+
+        ref = client.get(
+            "/api/reference/activity-types",
+            cookies={"spravoshnik_session": token},
+        ).json()
+        at_id = ref[0]["id"]
+
+        opo = _create_opos(
+            client, token, org["id"], "NM-AT-OMIT-001", activity_type_ids=[at_id]
+        )
+        assert len(opo.get("activity_types", [])) == 1
+
+        resp = client.patch(
+            f"/api/opo/{opo['id']}",
+            json={"name": "RenamedActivityOmitted"},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert len(resp.json()["activity_types"]) == 1, (
+            "activity_types must be preserved when omitted in PATCH"
+        )
+
+    def test_patch_opo_activity_type_empty_clears(
+        self, client: TestClient, superuser: dict
+    ):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "NM-AT-CLR Org", "NATC")
+
+        ref = client.get(
+            "/api/reference/activity-types",
+            cookies={"spravoshnik_session": token},
+        ).json()
+        at_id = ref[0]["id"]
+
+        opo = _create_opos(
+            client, token, org["id"], "NM-AT-CLR-001", activity_type_ids=[at_id]
+        )
+        assert len(opo.get("activity_types", [])) == 1
+
+        resp = client.patch(
+            f"/api/opo/{opo['id']}",
+            json={"activity_type_ids": []},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        assert len(resp.json()["activity_types"]) == 0, (
+            "activity_type_ids=[] must explicitly clear all activity types"
+        )
+
+    def test_patch_opo_activity_type_new_values(
+        self, client: TestClient, superuser: dict
+    ):
+        token = _login(client, str(superuser["username"]), str(superuser["password"]))
+        org = _create_org(client, token, "NM-AT-SET Org", "NATS")
+
+        ref = client.get(
+            "/api/reference/activity-types",
+            cookies={"spravoshnik_session": token},
+        ).json()
+
+        opo = _create_opos(
+            client, token, org["id"], "NM-AT-SET-001", activity_type_ids=[ref[0]["id"]]
+        )
+
+        resp = client.patch(
+            f"/api/opo/{opo['id']}",
+            json={"activity_type_ids": [ref[1]["id"]]},
+            cookies={"spravoshnik_session": token},
+        )
+        assert resp.status_code == 200, resp.text
+        atypes = resp.json()["activity_types"]
+        assert len(atypes) == 1, "should replace activity types"
+        assert atypes[0]["id"] == ref[1]["id"], "should contain new activity type"
+
 
 # ---------------------------------------------------------------------------
 # RED — Organization ownership (section 2-4, 16)

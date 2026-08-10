@@ -42,6 +42,13 @@ class TechnicalDeviceService:
                 raise TechnicalDeviceNotFoundError("OPO not found")
             if opo.deleted_at is not None:
                 raise TechnicalDeviceNotFoundError("OPO is deleted")
+            if (
+                opo.owner_organization_id != organization_id
+                and opo.operating_organization_id != organization_id
+            ):
+                raise TechnicalDeviceNotFoundError(
+                    "OPO does not belong to this organization"
+                )
 
         device = TechnicalDevice(
             name=name,
@@ -77,6 +84,7 @@ class TechnicalDeviceService:
         opo_id: uuid.UUID | None = None,
         opo_id_provided: bool = False,
         organization_id: uuid.UUID | None = None,
+        organization_id_provided: bool = False,
     ) -> TechnicalDevice:
         changed: list[str] = []
 
@@ -100,7 +108,7 @@ class TechnicalDeviceService:
             device.opo_id = opo_id
             changed.append("opo_id")
 
-        if organization_id is not None and organization_id != device.organization_id:
+        if organization_id_provided and organization_id != device.organization_id:
             org = get_organization(db, organization_id)
             if org is None:
                 raise TechnicalDeviceNotFoundError("Organization not found")
@@ -108,6 +116,21 @@ class TechnicalDeviceService:
                 raise TechnicalDeviceNotFoundError("Organization is deleted")
             device.organization_id = organization_id
             changed.append("organization_id")
+
+        if changed:
+            db.flush()
+
+        if device.opo_id is not None and device.organization_id is not None:
+            opo = get_opo(db, device.opo_id)
+            if (
+                opo is not None
+                and opo.deleted_at is None
+                and opo.owner_organization_id != device.organization_id
+                and opo.operating_organization_id != device.organization_id
+            ):
+                raise TechnicalDeviceNotFoundError(
+                    "OPO does not belong to this organization"
+                )
 
         if changed:
             write_audit(

@@ -90,6 +90,8 @@ def update_device(
     db: Session = Depends(get_db),
 ):
     device = _device_or_404(db, device_id)
+    if "organization_id" in payload.model_fields_set and payload.organization_id is None:
+        raise HTTPException(status_code=422, detail="organization_id cannot be null")
     try:
         return service.update_technical_device(
             db,
@@ -102,6 +104,7 @@ def update_device(
             opo_id=payload.opo_id,
             opo_id_provided="opo_id" in payload.model_fields_set,
             organization_id=payload.organization_id,
+            organization_id_provided="organization_id" in payload.model_fields_set,
         )
     except TechnicalDeviceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

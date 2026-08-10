@@ -32,7 +32,7 @@ class TechnicalDeviceResponse(BaseModel):
     device_type: str
     serial_number: str | None
     opo_id: uuid.UUID | None
-    organization_id: uuid.UUID
+    organization_id: uuid.UUID | None
     deleted_at: datetime | None
     created_at: datetime
     updated_at: datetime

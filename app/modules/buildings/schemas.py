@@ -29,7 +29,7 @@ class BuildingResponse(BaseModel):
     name: str
     building_type: str
     opo_id: uuid.UUID | None
-    organization_id: uuid.UUID
+    organization_id: uuid.UUID | None
     deleted_at: datetime | None
     created_at: datetime
     updated_at: datetime

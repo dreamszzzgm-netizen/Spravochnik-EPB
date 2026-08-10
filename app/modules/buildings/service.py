@@ -78,6 +78,7 @@ class BuildingService:
         opo_id: uuid.UUID | None = None,
         opo_id_provided: bool = False,
         organization_id: uuid.UUID | None = None,
+        organization_id_provided: bool = False,
     ) -> Building:
         changed: list[str] = []
 
@@ -98,16 +99,17 @@ class BuildingService:
             building.opo_id = opo_id
             changed.append("opo_id")
 
-        if organization_id is not None and organization_id != building.organization_id:
-            org = get_organization(db, organization_id)
-            if org is None:
-                raise BuildingNotFoundError("Organization not found")
-            if org.deleted_at is not None:
-                raise BuildingNotFoundError("Organization is deleted")
+        if organization_id_provided and organization_id != building.organization_id:
+            if organization_id is not None:
+                org = get_organization(db, organization_id)
+                if org is None:
+                    raise BuildingNotFoundError("Organization not found")
+                if org.deleted_at is not None:
+                    raise BuildingNotFoundError("Organization is deleted")
             building.organization_id = organization_id
             changed.append("organization_id")
 
-        final_org_id = organization_id if organization_id is not None else building.organization_id
+        final_org_id = building.organization_id
         final_opo_id = building.opo_id
         if opo_id_provided:
             final_opo_id = opo_id

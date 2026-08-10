@@ -25,10 +25,10 @@ class Building(Base):
         nullable=True,
         index=True,
     )
-    organization_id: Mapped[uuid.UUID] = mapped_column(
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

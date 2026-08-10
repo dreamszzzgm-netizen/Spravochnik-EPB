@@ -42,6 +42,8 @@ def _ensure_migrations():
     if not os.getenv("TEST_DATABASE_URL"):
         return
     from alembic.config import Config
+    from alembic.runtime.migration import MigrationContext
+    from sqlalchemy import create_engine as _create_engine
 
     from alembic import command
 
@@ -49,6 +51,14 @@ def _ensure_migrations():
     alembic_cfg.set_main_option("sqlalchemy.url", os.environ["TEST_DATABASE_URL"])
     os.environ["APP_ENV"] = "test"
     os.environ["TEST_DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
+
+    engine = _create_engine(os.environ["TEST_DATABASE_URL"])
+    with engine.connect() as conn:
+        context = MigrationContext.configure(conn)
+        current_rev = context.get_current_revision()
+        if current_rev == "0010_stage3":
+            command.downgrade(alembic_cfg, "0009_stage3")
+    engine.dispose()
     command.upgrade(alembic_cfg, "head")
 
 
