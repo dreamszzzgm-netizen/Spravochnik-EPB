@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Building2, ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { getOrganizations } from "@/lib/api/resources";
 import type { OrganizationResponse } from "@/lib/api/types";
 import { organizationName } from "@/lib/api/view-models";
 import { organizationStateMessage } from "@/lib/api/state-models";
+import { useCan } from "@/lib/auth";
 
 const PAGE_SIZE = 20;
 const typeLabels: Record<string, string> = {
@@ -26,6 +28,7 @@ export default function OrganizationsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const canCreate = useCan("organizations.create");
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -75,10 +78,14 @@ export default function OrganizationsPage() {
             Заказчики, владельцы и эксплуатирующие организации
           </p>
         </div>
-        <Button size="sm" disabled title="Создание будет подключено на Stage 2">
-          <Plus className="mr-1.5 h-4 w-4" />
-          Новая организация
-        </Button>
+        {canCreate && (
+          <Button size="sm" asChild>
+            <Link href="/organizations/new">
+              <Plus className="mr-1.5 h-4 w-4" />
+              Новая организация
+            </Link>
+          </Button>
+        )}
       </div>
 
       <div className="relative max-w-md">
@@ -97,19 +104,24 @@ export default function OrganizationsPage() {
             <li className="px-4 py-8 text-center text-sm text-muted-foreground">{message}</li>
           ) : (
             items!.map((organization) => (
-              <li key={organization.id} className="flex items-center gap-4 px-4 py-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                  <Building2 className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {organizationName(organization)}
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {typeLabels[organization.organization_type] ?? organization.organization_type}
-                    {organization.phone ? ` · ${organization.phone}` : ""}
-                  </p>
-                </div>
+              <li key={organization.id}>
+                <Link
+                  href={`/organizations/${organization.id}`}
+                  className="flex items-center gap-4 px-4 py-4 hover:bg-muted/40 transition-colors"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Building2 className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {organizationName(organization)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {typeLabels[organization.organization_type] ?? organization.organization_type}
+                      {organization.phone ? ` · ${organization.phone}` : ""}
+                    </p>
+                  </div>
+                </Link>
               </li>
             ))
           )}
