@@ -38,7 +38,7 @@ packages = ["app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --import-mode=importlib --basetemp=C:\\Users\\dream\\AppData\\Local\\Temp\\pytest-bt"
+addopts = "-ra --import-mode=importlib --basetemp=.pytest_tmp"
 markers = [
   "integration: requires PostgreSQL test database",
 ]
