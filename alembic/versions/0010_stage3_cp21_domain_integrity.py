@@ -94,8 +94,8 @@ def upgrade() -> None:
                 f"{table} has {len(ambiguous)} row(s) linked to OPOs where "
                 f"owner != operator. "
                 "Cannot determine the correct organization automatically. "
-                "Assign organization_id manually before upgrading.\n" +
-                "\n".join(details)
+                "Assign organization_id manually before upgrading.\n"
+                + "\n".join(details)
             )
 
         # Check for standalone rows (no OPO)
@@ -109,8 +109,8 @@ def upgrade() -> None:
                 f"(opo_id IS NULL). "
                 "Cannot backfill organization_id automatically. "
                 "Assign an organization to every standalone device/building "
-                "before upgrading.\n" +
-                "\n".join(details)
+                "before upgrading.\n"
+                + "\n".join(details)
             )
 
     # 5. Safe backfill (all preflight checks passed, owner == operator)
@@ -128,10 +128,18 @@ def upgrade() -> None:
 
     # 7. Ensure FK cascade on junction tables (idempotent for both old and new 0009)
     for table, fk_col, ref_table, fk_name in [
-        ("opo_hazard_signs", "hazard_sign_id", "hazard_signs",
-         "opo_hazard_signs_hazard_sign_id_fkey"),
-        ("opo_activity_types", "activity_type_id", "activity_types",
-         "opo_activity_types_activity_type_id_fkey"),
+        (
+            "opo_hazard_signs",
+            "hazard_sign_id",
+            "hazard_signs",
+            "opo_hazard_signs_hazard_sign_id_fkey",
+        ),
+        (
+            "opo_activity_types",
+            "activity_type_id",
+            "activity_types",
+            "opo_activity_types_activity_type_id_fkey",
+        ),
     ]:
         conn.execute(
             text(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {fk_name}")
@@ -148,6 +156,9 @@ def upgrade() -> None:
 def downgrade() -> None:
     conn = op.get_bind()
 
+    # Revised 0009 defines these junction FKs with ON UPDATE CASCADE.
+    # Downgrading 0010 must restore the exact 0009 schema state, not the
+    # pre-CP2.1.1 RESTRICT behavior.
     conn.execute(
         text(
             "ALTER TABLE opo_hazard_signs "
@@ -159,7 +170,7 @@ def downgrade() -> None:
             "ALTER TABLE opo_hazard_signs "
             "ADD CONSTRAINT opo_hazard_signs_hazard_sign_id_fkey "
             "FOREIGN KEY (hazard_sign_id) REFERENCES hazard_signs(id) "
-            "ON DELETE RESTRICT ON UPDATE RESTRICT"
+            "ON DELETE RESTRICT ON UPDATE CASCADE"
         )
     )
     conn.execute(
@@ -173,7 +184,7 @@ def downgrade() -> None:
             "ALTER TABLE opo_activity_types "
             "ADD CONSTRAINT opo_activity_types_activity_type_id_fkey "
             "FOREIGN KEY (activity_type_id) REFERENCES activity_types(id) "
-            "ON DELETE RESTRICT ON UPDATE RESTRICT"
+            "ON DELETE RESTRICT ON UPDATE CASCADE"
         )
     )
 
@@ -190,11 +201,13 @@ def downgrade() -> None:
         )
     )
 
-    op.drop_index(op.f("ix_technical_devices_organization_id"), table_name="technical_devices")
+    op.drop_index(
+        op.f("ix_technical_devices_organization_id"),
+        table_name="technical_devices",
+    )
     op.drop_column("technical_devices", "organization_id")
 
     op.drop_index(op.f("ix_buildings_organization_id"), table_name="buildings")
     op.drop_column("buildings", "organization_id")
 
     op.drop_column("opo", "comment")
-
