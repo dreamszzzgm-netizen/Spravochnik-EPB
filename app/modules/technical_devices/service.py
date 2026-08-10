@@ -5,8 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.modules.identity.audit import write_audit
 from app.modules.opo.repository import get_opo
+from app.modules.organizations.repository import get_organization
 from app.modules.technical_devices.enums import TechnicalDeviceType
 from app.modules.technical_devices.models import TechnicalDevice
+from app.modules.technical_devices.schemas import _UNSET
 
 
 class TechnicalDeviceNotFoundError(Exception):
@@ -25,9 +27,16 @@ class TechnicalDeviceService:
         actor_id: uuid.UUID,
         name: str,
         device_type: TechnicalDeviceType,
+        organization_id: uuid.UUID,
         opo_id: uuid.UUID | None = None,
         serial_number: str | None = None,
     ) -> TechnicalDevice:
+        org = get_organization(db, organization_id)
+        if org is None:
+            raise TechnicalDeviceNotFoundError("Organization not found")
+        if org.deleted_at is not None:
+            raise TechnicalDeviceNotFoundError("Organization is deleted")
+
         if opo_id is not None:
             opo = get_opo(db, opo_id)
             if opo is None:
@@ -40,6 +49,7 @@ class TechnicalDeviceService:
             device_type=device_type,
             serial_number=serial_number,
             opo_id=opo_id,
+            organization_id=organization_id,
         )
         db.add(device)
         db.flush()
@@ -63,8 +73,9 @@ class TechnicalDeviceService:
         device: TechnicalDevice,
         name: str | None = None,
         device_type: TechnicalDeviceType | None = None,
-        serial_number: str | None = None,
-        opo_id: uuid.UUID | None = None,
+        serial_number=_UNSET,
+        opo_id=_UNSET,
+        organization_id: uuid.UUID | None = None,
     ) -> TechnicalDevice:
         changed: list[str] = []
 
@@ -74,11 +85,11 @@ class TechnicalDeviceService:
         if device_type is not None and device_type != device.device_type:
             device.device_type = device_type
             changed.append("device_type")
-        if serial_number is not None and serial_number != device.serial_number:
+        if serial_number is not _UNSET and serial_number != device.serial_number:
             device.serial_number = serial_number or None
             changed.append("serial_number")
 
-        if opo_id != device.opo_id:
+        if opo_id is not _UNSET and opo_id != device.opo_id:
             if opo_id is not None:
                 opo = get_opo(db, opo_id)
                 if opo is None:
@@ -87,6 +98,15 @@ class TechnicalDeviceService:
                     raise TechnicalDeviceNotFoundError("OPO is deleted")
             device.opo_id = opo_id
             changed.append("opo_id")
+
+        if organization_id is not None and organization_id != device.organization_id:
+            org = get_organization(db, organization_id)
+            if org is None:
+                raise TechnicalDeviceNotFoundError("Organization not found")
+            if org.deleted_at is not None:
+                raise TechnicalDeviceNotFoundError("Organization is deleted")
+            device.organization_id = organization_id
+            changed.append("organization_id")
 
         if changed:
             write_audit(

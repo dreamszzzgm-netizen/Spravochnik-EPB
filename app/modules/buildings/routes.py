@@ -55,6 +55,7 @@ def create_building(
             actor_id=actor.id,
             name=payload.name,
             building_type=payload.building_type,
+            organization_id=payload.organization_id,
             opo_id=payload.opo_id,
         )
     except BuildingNotFoundError as exc:
@@ -86,6 +87,7 @@ def update_building(
             name=payload.name,
             building_type=payload.building_type,
             opo_id=payload.opo_id,
+            organization_id=payload.organization_id,
         )
     except BuildingNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

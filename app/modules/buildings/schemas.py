@@ -10,12 +10,22 @@ class BuildingCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     building_type: BuildingType
     opo_id: uuid.UUID | None = None
+    organization_id: uuid.UUID
+
+
+_UNSET = object()
 
 
 class BuildingUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = Field(default=None, min_length=1, max_length=255)
     building_type: BuildingType | None = None
-    opo_id: uuid.UUID | None = None
+    opo_id: uuid.UUID | None = Field(default=_UNSET)
+    organization_id: uuid.UUID | None = None
+
+    def model_post_init(self, __context):
+        pass
 
 
 class BuildingResponse(BaseModel):
@@ -25,6 +35,7 @@ class BuildingResponse(BaseModel):
     name: str
     building_type: str
     opo_id: uuid.UUID | None
+    organization_id: uuid.UUID
     deleted_at: datetime | None
     created_at: datetime
     updated_at: datetime

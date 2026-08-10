@@ -102,6 +102,7 @@ def _create_opo(db, svc, actor, org, reg_num, **kw):
         "registration_number": reg_num,
         "hazard_class": HazardClass.HAZARD_CLASS_2,
         "address": "Test Address",
+        "registration_date": "2024-01-15",
         "owner_organization_id": org.id,
         "operating_organization_id": org.id,
     }
@@ -127,6 +128,7 @@ def test_opo_different_owner_operator(db, actor, org, opo_svc):
         db, actor_id=actor.id,
         name="Multi", registration_number="MULTI-001",
         hazard_class=HazardClass.HAZARD_CLASS_1, address="Addr",
+        registration_date="2024-01-15",
         owner_organization_id=org.id,
         operating_organization_id=org2.id,
     )
@@ -139,6 +141,7 @@ def test_opo_invalid_owner(db, actor, org, opo_svc):
         opo_svc.create_opo(
             db, actor_id=actor.id, name="Bad", registration_number="BAD-001",
             hazard_class=HazardClass.HAZARD_CLASS_1, address="Addr",
+            registration_date="2024-01-15",
             owner_organization_id=uuid.uuid4(),
             operating_organization_id=org.id,
         )
@@ -175,6 +178,7 @@ def test_opo_create_with_hazard_signs(db, actor, org, opo_svc):
         db, actor_id=actor.id,
         name="HS OPO", registration_number="HS-001",
         hazard_class=HazardClass.HAZARD_CLASS_1, address="Addr",
+        registration_date="2024-01-15",
         owner_organization_id=org.id,
         operating_organization_id=org.id,
         hazard_sign_ids=[s.id for s in signs],
@@ -209,12 +213,12 @@ def test_opo_update_activity_types(db, actor, org, opo_svc):
 def test_opo_delete_preserves_td_building(db, actor, org, opo_svc, td_svc, bld_svc):
     opo = _create_opo(db, opo_svc, actor, org, "PRES-001")
     device = td_svc.create_technical_device(
-        db, actor_id=actor.id, name="TD", device_type=TechnicalDeviceType.OTHER,
-        opo_id=opo.id,
+        db, actor_id=actor.id, organization_id=org.id,
+        name="TD", device_type=TechnicalDeviceType.OTHER, opo_id=opo.id,
     )
     building = bld_svc.create_building(
-        db, actor_id=actor.id, name="BLD", building_type=BuildingType.OTHER,
-        opo_id=opo.id,
+        db, actor_id=actor.id, organization_id=org.id,
+        name="BLD", building_type=BuildingType.OTHER, opo_id=opo.id,
     )
     opo_svc.delete_opo(db, actor_id=actor.id, opo=opo)
     db.refresh(device)
@@ -226,9 +230,10 @@ def test_opo_delete_preserves_td_building(db, actor, org, opo_svc, td_svc, bld_s
 # ---------------------------------------------------------------------------
 # Technical Devices
 # ---------------------------------------------------------------------------
-def test_td_create_without_opo(db, actor, td_svc):
+def test_td_create_without_opo(db, actor, org, td_svc):
     device = td_svc.create_technical_device(
-        db, actor_id=actor.id, name="Standalone",
+        db, actor_id=actor.id, organization_id=org.id,
+        name="Standalone",
         device_type=TechnicalDeviceType.PRESSURE_VESSEL,
     )
     assert device.id is not None
@@ -238,24 +243,26 @@ def test_td_create_without_opo(db, actor, td_svc):
 def test_td_create_with_opo(db, actor, org, opo_svc, td_svc):
     opo = _create_opo(db, opo_svc, actor, org, "TD-OPO-001")
     device = td_svc.create_technical_device(
-        db, actor_id=actor.id, name="Linked",
+        db, actor_id=actor.id, organization_id=org.id, name="Linked",
         device_type=TechnicalDeviceType.PIPELINE, opo_id=opo.id,
     )
     assert device.opo_id == opo.id
 
 
-def test_td_update(db, actor, td_svc):
+def test_td_update(db, actor, org, td_svc):
     device = td_svc.create_technical_device(
-        db, actor_id=actor.id, name="Upd", device_type=TechnicalDeviceType.OTHER,
+        db, actor_id=actor.id, organization_id=org.id,
+        name="Upd", device_type=TechnicalDeviceType.OTHER,
     )
     td_svc.update_technical_device(db, actor_id=actor.id, device=device, name="Updated")
     db.refresh(device)
     assert device.name == "Updated"
 
 
-def test_td_soft_delete_and_restore(db, actor, td_svc):
+def test_td_soft_delete_and_restore(db, actor, org, td_svc):
     device = td_svc.create_technical_device(
-        db, actor_id=actor.id, name="Del", device_type=TechnicalDeviceType.OTHER,
+        db, actor_id=actor.id, organization_id=org.id,
+        name="Del", device_type=TechnicalDeviceType.OTHER,
     )
     td_svc.delete_technical_device(db, actor_id=actor.id, device=device)
     db.refresh(device)
@@ -268,9 +275,9 @@ def test_td_soft_delete_and_restore(db, actor, td_svc):
 # ---------------------------------------------------------------------------
 # Buildings
 # ---------------------------------------------------------------------------
-def test_bld_create_without_opo(db, actor, bld_svc):
+def test_bld_create_without_opo(db, actor, org, bld_svc):
     building = bld_svc.create_building(
-        db, actor_id=actor.id, name="Standalone",
+        db, actor_id=actor.id, organization_id=org.id, name="Standalone",
         building_type=BuildingType.INDUSTRIAL,
     )
     assert building.id is not None
@@ -280,24 +287,26 @@ def test_bld_create_without_opo(db, actor, bld_svc):
 def test_bld_create_with_opo(db, actor, org, opo_svc, bld_svc):
     opo = _create_opo(db, opo_svc, actor, org, "BLD-OPO-001")
     building = bld_svc.create_building(
-        db, actor_id=actor.id, name="Linked",
+        db, actor_id=actor.id, organization_id=org.id, name="Linked",
         building_type=BuildingType.WAREHOUSE, opo_id=opo.id,
     )
     assert building.opo_id == opo.id
 
 
-def test_bld_update(db, actor, bld_svc):
+def test_bld_update(db, actor, org, bld_svc):
     building = bld_svc.create_building(
-        db, actor_id=actor.id, name="Upd", building_type=BuildingType.OTHER,
+        db, actor_id=actor.id, organization_id=org.id,
+        name="Upd", building_type=BuildingType.OTHER,
     )
     bld_svc.update_building(db, actor_id=actor.id, building=building, name="Updated")
     db.refresh(building)
     assert building.name == "Updated"
 
 
-def test_bld_soft_delete_and_restore(db, actor, bld_svc):
+def test_bld_soft_delete_and_restore(db, actor, org, bld_svc):
     building = bld_svc.create_building(
-        db, actor_id=actor.id, name="Del", building_type=BuildingType.OTHER,
+        db, actor_id=actor.id, organization_id=org.id,
+        name="Del", building_type=BuildingType.OTHER,
     )
     bld_svc.delete_building(db, actor_id=actor.id, building=building)
     db.refresh(building)
@@ -329,32 +338,35 @@ def test_deterministic_uuids(db):
 # ---------------------------------------------------------------------------
 # Custom fields typed dispatch
 # ---------------------------------------------------------------------------
-def test_custom_field_text_accepted(db, actor, cf_svc):
+def test_custom_field_text_accepted(db, actor, org, opo_svc, cf_svc):
+    opo = _create_opo(db, opo_svc, actor, org, "CF-TEXT-001")
     definition = cf_svc.create_definition(
         db, actor_id=actor.id, code="cf_text", name="Text Field",
         entity_type="opo", field_type="text",
     )
     value = cf_svc.set_value(
         db, actor_id=actor.id, field_definition_id=definition.id,
-        entity_type="opo", entity_id=uuid.uuid4(), value="hello",
+        entity_type="opo", entity_id=opo.id, value="hello",
     )
     assert value.value_text == "hello"
 
 
-def test_custom_field_number_accepted(db, actor, cf_svc):
+def test_custom_field_number_accepted(db, actor, org, opo_svc, cf_svc):
+    opo = _create_opo(db, opo_svc, actor, org, "CF-NUM-001")
     definition = cf_svc.create_definition(
         db, actor_id=actor.id, code="cf_num", name="Num Field",
         entity_type="opo", field_type="number",
     )
     value = cf_svc.set_value(
         db, actor_id=actor.id, field_definition_id=definition.id,
-        entity_type="opo", entity_id=uuid.uuid4(), value="42.5",
+        entity_type="opo", entity_id=opo.id, value="42.5",
     )
     assert value.value_number is not None
     assert str(value.value_number) == "42.5"
 
 
-def test_custom_field_number_rejected(db, actor, cf_svc):
+def test_custom_field_number_rejected(db, actor, org, opo_svc, cf_svc):
+    opo = _create_opo(db, opo_svc, actor, org, "CF-NUM-002")
     definition = cf_svc.create_definition(
         db, actor_id=actor.id, code="cf_num2", name="Num Field 2",
         entity_type="opo", field_type="number",
@@ -364,30 +376,32 @@ def test_custom_field_number_rejected(db, actor, cf_svc):
     with pytest.raises(CustomFieldValidationError):
         cf_svc.set_value(
             db, actor_id=actor.id, field_definition_id=definition.id,
-            entity_type="opo", entity_id=uuid.uuid4(), value="not-a-number",
+            entity_type="opo", entity_id=opo.id, value="not-a-number",
         )
 
 
-def test_custom_field_date_accepted(db, actor, cf_svc):
+def test_custom_field_date_accepted(db, actor, org, opo_svc, cf_svc):
+    opo = _create_opo(db, opo_svc, actor, org, "CF-DATE-001")
     definition = cf_svc.create_definition(
         db, actor_id=actor.id, code="cf_date", name="Date Field",
         entity_type="opo", field_type="date",
     )
     value = cf_svc.set_value(
         db, actor_id=actor.id, field_definition_id=definition.id,
-        entity_type="opo", entity_id=uuid.uuid4(), value="2024-01-15",
+        entity_type="opo", entity_id=opo.id, value="2024-01-15",
     )
     assert value.value_date is not None
 
 
-def test_custom_field_boolean_accepted(db, actor, cf_svc):
+def test_custom_field_boolean_accepted(db, actor, org, opo_svc, cf_svc):
+    opo = _create_opo(db, opo_svc, actor, org, "CF-BOOL-001")
     definition = cf_svc.create_definition(
         db, actor_id=actor.id, code="cf_bool", name="Bool Field",
         entity_type="opo", field_type="boolean",
     )
     value = cf_svc.set_value(
         db, actor_id=actor.id, field_definition_id=definition.id,
-        entity_type="opo", entity_id=uuid.uuid4(), value="true",
+        entity_type="opo", entity_id=opo.id, value="true",
     )
     assert value.value_boolean is True
 
@@ -406,12 +420,13 @@ def test_custom_field_wrong_entity_type(db, actor, cf_svc):
         )
 
 
-def test_custom_field_clear(db, actor, cf_svc):
+def test_custom_field_clear(db, actor, org, opo_svc, cf_svc):
+    opo = _create_opo(db, opo_svc, actor, org, "CF-CLEAR-001")
     definition = cf_svc.create_definition(
         db, actor_id=actor.id, code="cf_clear", name="Clearable",
         entity_type="opo", field_type="text",
     )
-    eid = uuid.uuid4()
+    eid = opo.id
     cf_svc.set_value(
         db, actor_id=actor.id, field_definition_id=definition.id,
         entity_type="opo", entity_id=eid, value="temp",

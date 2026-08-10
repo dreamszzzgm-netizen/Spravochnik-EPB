@@ -28,15 +28,8 @@ def list_technical_devices_paginated(
 
     stmt = select(TechnicalDevice).where(TechnicalDevice.deleted_at.is_(None))
 
-    if organization_id is not None:
-        from app.modules.opo.models import OPO
-
-        stmt = stmt.join(OPO, TechnicalDevice.opo_id == OPO.id, isouter=True).where(
-            or_(
-                OPO.owner_organization_id == organization_id,
-                OPO.operating_organization_id == organization_id,
-            )
-        )
+    if organization_id:
+        stmt = stmt.where(TechnicalDevice.organization_id == organization_id)
 
     if opo_id is not None:
         stmt = stmt.where(TechnicalDevice.opo_id == opo_id)

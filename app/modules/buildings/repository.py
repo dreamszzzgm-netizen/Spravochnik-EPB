@@ -24,19 +24,10 @@ def list_buildings_paginated(
     organization_id: uuid.UUID | None = None,
     opo_id: uuid.UUID | None = None,
 ) -> tuple[list[Building], int]:
-    from sqlalchemy import or_
-
     stmt = select(Building).where(Building.deleted_at.is_(None))
 
-    if organization_id is not None:
-        from app.modules.opo.models import OPO
-
-        stmt = stmt.join(OPO, Building.opo_id == OPO.id, isouter=True).where(
-            or_(
-                OPO.owner_organization_id == organization_id,
-                OPO.operating_organization_id == organization_id,
-            )
-        )
+    if organization_id:
+        stmt = stmt.where(Building.organization_id == organization_id)
 
     if opo_id is not None:
         stmt = stmt.where(Building.opo_id == opo_id)

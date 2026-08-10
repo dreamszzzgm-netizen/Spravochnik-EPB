@@ -1,5 +1,4 @@
 import os
-import uuid
 from collections.abc import Generator
 
 import pytest
@@ -7,11 +6,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+# Ensure Alembic migrations target the test database
+if os.getenv("TEST_DATABASE_URL"):
+    os.environ["APP_ENV"] = "test"
+
 from app.database.session import get_db
 from app.main import app
 from app.modules.identity.models import (
     Employee,
-    Permission,
     Role,
     RolePermission,
     User,
@@ -33,6 +35,24 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 
 
 # ---------------------------------------------------------------------------
+# Session-scoped fixture: ensure the test DB is at the latest migration
+# ---------------------------------------------------------------------------
+@pytest.fixture(scope="session", autouse=True)
+def _ensure_migrations():
+    if not os.getenv("TEST_DATABASE_URL"):
+        return
+    from alembic.config import Config
+
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+    alembic_cfg.set_main_option("sqlalchemy.url", os.environ["TEST_DATABASE_URL"])
+    os.environ["APP_ENV"] = "test"
+    os.environ["TEST_DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
+    command.upgrade(alembic_cfg, "head")
+
+
+# ---------------------------------------------------------------------------
 # Общие фикстуры для HTTP-интеграционных тестов (используют TestClient)
 # ---------------------------------------------------------------------------
 
@@ -45,11 +65,16 @@ def db_session() -> Generator[Session, None, None]:
             text("""
             TRUNCATE TABLE
                 audit_events,
+                custom_field_values, custom_field_definitions,
+                opo_hazard_signs, opo_activity_types, opo,
+                technical_devices,
+                buildings,
                 organization_identifiers, organization_contacts, organizations,
                 role_permissions, user_role_assignments,
                 user_sessions, password_reset_events, users,
                 employee_function_role_assignments,
-                employees
+                employees,
+                roles
             RESTART IDENTITY CASCADE
         """)
         )

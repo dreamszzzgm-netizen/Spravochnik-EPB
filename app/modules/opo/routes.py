@@ -67,6 +67,7 @@ def create_opo(
             operating_organization_id=payload.operating_organization_id,
             hazard_sign_ids=payload.hazard_sign_ids,
             activity_type_ids=payload.activity_type_ids,
+            comment=payload.comment,
         )
         return service.get_opo_detail(db, opo.id)
     except OPONotFoundError as exc:
@@ -107,6 +108,7 @@ def update_opo(
             operating_organization_id=payload.operating_organization_id,
             hazard_sign_ids=payload.hazard_sign_ids,
             activity_type_ids=payload.activity_type_ids,
+            comment=payload.comment,
         )
         return service.get_opo_detail(db, opo.id)
     except OPONotFoundError as exc:

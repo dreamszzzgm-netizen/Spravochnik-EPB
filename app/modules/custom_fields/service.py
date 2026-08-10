@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from datetime import date as date_type
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,28 @@ from app.modules.custom_fields.models import (
     CustomFieldValue,
 )
 from app.modules.identity.audit import write_audit
+
+_VALID_ENTITY_TYPES = {"opo", "technical_device", "building"}
+
+_ENTITY_LOOKUP = {
+    "opo": ("opo", "id"),
+    "technical_device": ("technical_devices", "id"),
+    "building": ("buildings", "id"),
+}
+
+
+def _entity_exists(db: Session, entity_type: str, entity_id: uuid.UUID) -> bool:
+    if entity_type not in _VALID_ENTITY_TYPES:
+        raise CustomFieldValidationError(
+            f"Unsupported entity type '{entity_type}'. "
+            f"Supported: {', '.join(sorted(_VALID_ENTITY_TYPES))}."
+        )
+    table, pk = _ENTITY_LOOKUP[entity_type]
+    row = db.execute(
+        text(f"SELECT 1 FROM {table} WHERE {pk} = :eid AND deleted_at IS NULL"),
+        {"eid": entity_id},
+    ).first()
+    return row is not None
 
 
 class CustomFieldConflictError(Exception):
@@ -77,6 +99,10 @@ class CustomFieldService:
         entity_type: str,
         entity_id: uuid.UUID,
     ) -> list[CustomFieldValue]:
+        if not _entity_exists(db, entity_type, entity_id):
+            raise CustomFieldNotFoundError(
+                f"Entity {entity_type}/{entity_id} not found or deleted"
+            )
         return list(
             db.scalars(
                 select(CustomFieldValue)
@@ -150,6 +176,11 @@ class CustomFieldService:
         if definition.entity_type != entity_type:
             raise CustomFieldValidationError(
                 f"Field definition {definition.code} does not apply to entity type {entity_type}"
+            )
+
+        if not _entity_exists(db, entity_type, entity_id):
+            raise CustomFieldNotFoundError(
+                f"Entity {entity_type}/{entity_id} not found or deleted"
             )
 
         typed_value = self._validate_value(db, definition, value)

@@ -16,6 +16,7 @@ from app.modules.opo.repository import (
     list_opo_activity_types,
     list_opo_hazard_signs,
 )
+from app.modules.opo.schemas import _UNSET
 from app.modules.organizations.repository import get_organization
 
 
@@ -41,11 +42,12 @@ class OPOService:
         registration_number: str,
         hazard_class: HazardClass,
         address: str,
-        registration_date: date_type | None = None,
+        registration_date: date_type,
         owner_organization_id: uuid.UUID,
         operating_organization_id: uuid.UUID,
         hazard_sign_ids: list[uuid.UUID] | None = None,
         activity_type_ids: list[uuid.UUID] | None = None,
+        comment: str | None = None,
     ) -> OPO:
         owner = get_organization(db, owner_organization_id)
         if owner is None:
@@ -80,9 +82,10 @@ class OPOService:
             registration_number=registration_number,
             hazard_class=hazard_class,
             address=address,
-            registration_date=registration_date or date_type.today(),
+            registration_date=registration_date,
             owner_organization_id=owner_organization_id,
             operating_organization_id=operating_organization_id,
+            comment=comment,
         )
         db.add(opo)
         db.flush()
@@ -119,6 +122,7 @@ class OPOService:
         operating_organization_id: uuid.UUID | None = None,
         hazard_sign_ids: list[uuid.UUID] | None = None,
         activity_type_ids: list[uuid.UUID] | None = None,
+        comment: str | None = _UNSET,
     ) -> OPO:
         changed: list[str] = []
 
@@ -197,6 +201,10 @@ class OPOService:
             for type_id in activity_type_ids:
                 db.add(OPOActivityType(opo_id=opo.id, activity_type_id=type_id))
             changed.append("activity_types")
+
+        if comment is not _UNSET and comment != opo.comment:
+            opo.comment = comment
+            changed.append("comment")
 
         if changed:
             write_audit(

@@ -40,7 +40,10 @@ def read_values(
     _actor: User = Depends(require_permission("custom_fields.manage")),
     db: Session = Depends(get_db),
 ):
-    return service.get_values(db, entity_type=entity_type, entity_id=entity_id)
+    try:
+        return service.get_values(db, entity_type=entity_type, entity_id=entity_id)
+    except CustomFieldNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.put(

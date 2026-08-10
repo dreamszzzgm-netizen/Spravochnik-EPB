@@ -21,12 +21,15 @@ class OPOActivityTypeResponse(BaseModel):
     name: str
 
 
+_UNSET = object()
+
+
 class OPOCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     registration_number: str = Field(min_length=1, max_length=100)
     hazard_class: HazardClass
     address: str = Field(min_length=1, max_length=500)
-    registration_date: date_type | None = None
+    registration_date: date_type
     owner_organization_id: uuid.UUID
     operating_organization_id: uuid.UUID
     hazard_sign_ids: list[uuid.UUID] = []
@@ -35,6 +38,8 @@ class OPOCreate(BaseModel):
 
 
 class OPOUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = Field(default=None, min_length=1, max_length=255)
     registration_number: str | None = Field(default=None, min_length=1, max_length=100)
     hazard_class: HazardClass | None = None
@@ -44,7 +49,10 @@ class OPOUpdate(BaseModel):
     operating_organization_id: uuid.UUID | None = None
     hazard_sign_ids: list[uuid.UUID] | None = None
     activity_type_ids: list[uuid.UUID] | None = None
-    comment: str | None = None
+    comment: str | None = Field(default=_UNSET)
+
+    def model_post_init(self, __context):
+        pass
 
 
 class OPOResponse(BaseModel):
@@ -59,6 +67,7 @@ class OPOResponse(BaseModel):
     owner_organization_id: uuid.UUID
     operating_organization_id: uuid.UUID
     deleted_at: datetime | None
+    comment: str | None
     created_at: datetime
     updated_at: datetime
 

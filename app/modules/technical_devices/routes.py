@@ -67,6 +67,7 @@ def create_device(
             device_type=payload.device_type,
             serial_number=payload.serial_number,
             opo_id=payload.opo_id,
+            organization_id=payload.organization_id,
         )
     except TechnicalDeviceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -98,6 +99,7 @@ def update_device(
             device_type=payload.device_type,
             serial_number=payload.serial_number,
             opo_id=payload.opo_id,
+            organization_id=payload.organization_id,
         )
     except TechnicalDeviceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

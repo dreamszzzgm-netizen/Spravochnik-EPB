@@ -1,5 +1,4 @@
 import os
-import uuid
 
 import pytest
 from sqlalchemy import create_engine, select, text
@@ -126,6 +125,7 @@ def test_opo_different_owner_and_operator(
         address="ул. Тестовая, 1",
         owner_organization_id=owner.id,
         operating_organization_id=operator.id,
+        registration_date="2024-01-15",
     )
     assert opo.owner_organization_id == owner.id
     assert opo.operating_organization_id == operator.id
@@ -151,6 +151,7 @@ def test_opo_same_owner_and_operator(
         address="ул. Общая, 5",
         owner_organization_id=org.id,
         operating_organization_id=org.id,
+        registration_date="2024-01-15",
     )
     assert opo.owner_organization_id == org.id
     assert opo.operating_organization_id == org.id
@@ -161,15 +162,18 @@ def test_opo_same_owner_and_operator(
 # ---------------------------------------------------------------------------
 def test_technical_device_without_opo(
     db: Session,
+    org_service: OrganizationService,
     td_service: TechnicalDeviceService,
     actor: User,
 ) -> None:
+    org = _create_org(db, org_service, actor, "OOO Test Devices")
     device = td_service.create_technical_device(
         db,
         actor_id=actor.id,
         name="Компрессор К-500",
         device_type=TechDeviceType.PRESSURE_VESSEL,
         opo_id=None,
+        organization_id=org.id,
     )
     assert device.id is not None
     assert device.opo_id is None
@@ -180,15 +184,18 @@ def test_technical_device_without_opo(
 # ---------------------------------------------------------------------------
 def test_building_without_opo(
     db: Session,
+    org_service: OrganizationService,
     building_service: BuildingService,
     actor: User,
 ) -> None:
+    org = _create_org(db, org_service, actor, "OOO Test Buildings")
     building = building_service.create_building(
         db,
         actor_id=actor.id,
         name="Корпус А",
         building_type=BldgType.INDUSTRIAL,
         opo_id=None,
+        organization_id=org.id,
     )
     assert building.id is not None
     assert building.opo_id is None
@@ -214,6 +221,7 @@ def test_delete_opo_preserves_technical_device(
         address="ул. Промышленная, 10",
         owner_organization_id=org.id,
         operating_organization_id=org.id,
+        registration_date="2024-01-15",
     )
     device = td_service.create_technical_device(
         db,
@@ -221,6 +229,7 @@ def test_delete_opo_preserves_technical_device(
         name="Резервуар Р-100",
         device_type=TechDeviceType.PRESSURE_VESSEL,
         opo_id=opo.id,
+        organization_id=org.id,
     )
     assert device.opo_id == opo.id
 
@@ -249,6 +258,7 @@ def test_delete_opo_preserves_building(
         address="ул. Заводская, 3",
         owner_organization_id=org.id,
         operating_organization_id=org.id,
+        registration_date="2024-01-15",
     )
     building = building_service.create_building(
         db,
@@ -256,6 +266,7 @@ def test_delete_opo_preserves_building(
         name="Цех №1",
         building_type=BldgType.INDUSTRIAL,
         opo_id=opo.id,
+        organization_id=org.id,
     )
     assert building.opo_id == opo.id
 
@@ -283,6 +294,7 @@ def test_opo_hazard_signs_nm(
         address="ул. Опасная, 7",
         owner_organization_id=org.id,
         operating_organization_id=org.id,
+        registration_date="2024-01-15",
     )
 
     sign1 = db.execute(select(HazardSign).where(HazardSign.code == "explosive")).scalar_one()
@@ -317,6 +329,7 @@ def test_opo_activity_types_nm(
         address="ул. Деятельная, 2",
         owner_organization_id=org.id,
         operating_organization_id=org.id,
+        registration_date="2024-01-15",
     )
 
     at1 = db.execute(select(ActivityType).where(ActivityType.code == "production")).scalar_one()
@@ -339,15 +352,18 @@ def test_opo_activity_types_nm(
 # ---------------------------------------------------------------------------
 def test_technical_device_type_persisted(
     db: Session,
+    org_service: OrganizationService,
     td_service: TechnicalDeviceService,
     actor: User,
 ) -> None:
+    org = _create_org(db, org_service, actor, "OOO Test Device Types")
     device = td_service.create_technical_device(
         db,
         actor_id=actor.id,
         name="Котёл К-100",
         device_type=TechDeviceType.PRESSURE_VESSEL,
         opo_id=None,
+        organization_id=org.id,
     )
     raw = db.execute(
         text("select device_type::text from technical_devices where id = :id"),
@@ -361,15 +377,18 @@ def test_technical_device_type_persisted(
 # ---------------------------------------------------------------------------
 def test_building_type_persisted(
     db: Session,
+    org_service: OrganizationService,
     building_service: BuildingService,
     actor: User,
 ) -> None:
+    org = _create_org(db, org_service, actor, "OOO Test Building Types")
     building = building_service.create_building(
         db,
         actor_id=actor.id,
         name="Склад С-1",
         building_type=BldgType.WAREHOUSE,
         opo_id=None,
+        organization_id=org.id,
     )
     raw = db.execute(
         text("select building_type::text from buildings where id = :id"),
@@ -383,9 +402,23 @@ def test_building_type_persisted(
 # ---------------------------------------------------------------------------
 def test_custom_field_definition_and_value(
     db: Session,
+    org_service: OrganizationService,
+    opo_service: OPOService,
     cf_service: CustomFieldService,
     actor: User,
 ) -> None:
+    org = _create_org(db, org_service, actor, "CF Test Org")
+    opo = opo_service.create_opo(
+        db,
+        actor_id=actor.id,
+        name="CfOpo",
+        registration_number="CF-001",
+        hazard_class=HazardClass.HAZARD_CLASS_2,
+        address="Test",
+        owner_organization_id=org.id,
+        operating_organization_id=org.id,
+        registration_date="2024-01-15",
+    )
     definition = cf_service.create_definition(
         db,
         actor_id=actor.id,
@@ -402,7 +435,7 @@ def test_custom_field_definition_and_value(
         actor_id=actor.id,
         field_definition_id=definition.id,
         entity_type="opo",
-        entity_id=uuid.uuid4(),
+        entity_id=opo.id,
         value="Тестовый комментарий",
     )
     assert value.id is not None
@@ -414,9 +447,23 @@ def test_custom_field_definition_and_value(
 # ---------------------------------------------------------------------------
 def test_custom_field_value_unique_constraint(
     db: Session,
+    org_service: OrganizationService,
+    opo_service: OPOService,
     cf_service: CustomFieldService,
     actor: User,
 ) -> None:
+    org = _create_org(db, org_service, actor, "CF Test Org 2")
+    opo = opo_service.create_opo(
+        db,
+        actor_id=actor.id,
+        name="CfOpo2",
+        registration_number="CF-002",
+        hazard_class=HazardClass.HAZARD_CLASS_2,
+        address="Test",
+        owner_organization_id=org.id,
+        operating_organization_id=org.id,
+        registration_date="2024-01-15",
+    )
     definition = cf_service.create_definition(
         db,
         actor_id=actor.id,
@@ -425,7 +472,7 @@ def test_custom_field_value_unique_constraint(
         entity_type="opo",
         field_type="text",
     )
-    entity_id = uuid.uuid4()
+    entity_id = opo.id
 
     cf_service.set_value(
         db,
