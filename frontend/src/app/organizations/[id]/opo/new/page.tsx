@@ -25,6 +25,7 @@ import type {
   ReferenceItemResponse,
 } from "@/lib/api/types";
 import { organizationName } from "@/lib/api/view-models";
+import { useCan } from "@/lib/auth";
 
 const HAZARD_CLASSES: { value: HazardClass; label: string }[] = [
   { value: "hazard_class_1", label: "I класс опасности" },
@@ -37,14 +38,16 @@ export default function NewOpoPage() {
   const params = useParams();
   const router = useRouter();
   const organizationId = params.id as string;
+  const canViewOpo = useCan("opo.view");
+  const canViewOrganizations = useCan("organizations.view");
 
   const [name, setName] = useState("");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [hazardClass, setHazardClass] = useState<HazardClass>("hazard_class_3");
   const [address, setAddress] = useState("");
   const [registrationDate, setRegistrationDate] = useState("");
-  const [ownerOrganizationId, setOwnerOrganizationId] = useState("");
-  const [operatingOrganizationId, setOperatingOrganizationId] = useState("");
+  const [ownerOrganizationId, setOwnerOrganizationId] = useState(organizationId);
+  const [operatingOrganizationId, setOperatingOrganizationId] = useState(organizationId);
   const [hazardSignIds, setHazardSignIds] = useState<string[]>([]);
   const [activityTypeIds, setActivityTypeIds] = useState<string[]>([]);
   const [comment, setComment] = useState("");
@@ -52,29 +55,38 @@ export default function NewOpoPage() {
   const [organizations, setOrganizations] = useState<OrganizationResponse[]>([]);
   const [hazardSigns, setHazardSigns] = useState<ReferenceItemResponse[]>([]);
   const [activityTypes, setActivityTypes] = useState<ReferenceItemResponse[]>([]);
-  const [supportingLoading, setSupportingLoading] = useState(true);
-  const [supportingError, setSupportingError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      getOrganizations({ page: 1, page_size: 100 }),
-      getHazardSigns(),
-      getActivityTypes(),
-    ])
-      .then(([orgs, signs, activities]) => {
-        setOrganizations(orgs.items);
+    if (!canViewOrganizations) return;
+
+    const controller = new AbortController();
+
+    getOrganizations({
+      page: 1,
+      page_size: 100,
+      signal: controller.signal,
+    })
+      .then((data) => setOrganizations(data.items))
+      .catch(() => setOrganizations([]));
+
+    return () => controller.abort();
+  }, [canViewOrganizations]);
+
+  useEffect(() => {
+    if (!canViewOpo) return;
+
+    Promise.all([getHazardSigns(), getActivityTypes()])
+      .then(([signs, activities]) => {
         setHazardSigns(signs);
         setActivityTypes(activities);
-        if (orgs.items.some((org) => org.id === organizationId)) {
-          setOwnerOrganizationId(organizationId);
-          setOperatingOrganizationId(organizationId);
-        }
       })
-      .catch((e) => setSupportingError(e instanceof ApiError ? e.detail : "Ошибка загрузки"))
-      .finally(() => setSupportingLoading(false));
-  }, [organizationId]);
+      .catch(() => {
+        setHazardSigns([]);
+        setActivityTypes([]);
+      });
+  }, [canViewOpo]);
 
   const toggleCheckbox = useCallback(
     (list: string[], value: string, setter: (next: string[]) => void) => {
@@ -89,10 +101,6 @@ export default function NewOpoPage() {
       setError(null);
       if (!name.trim() || !registrationNumber.trim() || !address.trim() || !registrationDate) {
         setError("Заполните обязательные поля.");
-        return;
-      }
-      if (!ownerOrganizationId || !operatingOrganizationId) {
-        setError("Укажите владельца и эксплуатирующую организацию.");
         return;
       }
       setPending(true);
@@ -133,36 +141,57 @@ export default function NewOpoPage() {
     ],
   );
 
-  const renderOrganizationSelects = () => (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <div className="space-y-2">
-        <Label htmlFor="owner_organization_id">Владелец *</Label>
-        <Select value={ownerOrganizationId} onValueChange={setOwnerOrganizationId}>
-          <SelectTrigger id="owner_organization_id"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {organizations.map((org) => (
-              <SelectItem key={org.id} value={org.id}>
-                {organizationName(org)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+  const renderOrganizationSelects = () => {
+    if (organizations.length === 0) {
+      return (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="owner_organization_id">Владелец *</Label>
+            <p className="text-sm text-muted-foreground" id="owner_organization_id">
+              Текущая организация
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="operating_organization_id">Эксплуатирующая организация *</Label>
+            <p className="text-sm text-muted-foreground" id="operating_organization_id">
+              Текущая организация
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="owner_organization_id">Владелец *</Label>
+          <Select value={ownerOrganizationId} onValueChange={setOwnerOrganizationId}>
+            <SelectTrigger id="owner_organization_id"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {organizations.map((org) => (
+                <SelectItem key={org.id} value={org.id}>
+                  {organizationName(org)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="operating_organization_id">Эксплуатирующая организация *</Label>
+          <Select value={operatingOrganizationId} onValueChange={setOperatingOrganizationId}>
+            <SelectTrigger id="operating_organization_id"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {organizations.map((org) => (
+                <SelectItem key={org.id} value={org.id}>
+                  {organizationName(org)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="operating_organization_id">Эксплуатирующая организация *</Label>
-        <Select value={operatingOrganizationId} onValueChange={setOperatingOrganizationId}>
-          <SelectTrigger id="operating_organization_id"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {organizations.map((org) => (
-              <SelectItem key={org.id} value={org.id}>
-                {organizationName(org)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -181,130 +210,120 @@ export default function NewOpoPage() {
             <CardTitle>Сведения об объекте</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {supportingLoading ? (
-              <p className="text-sm text-muted-foreground">Загрузка справочных данных...</p>
-            ) : supportingError ? (
-              <p className="text-sm text-destructive" role="alert">
-                {supportingError}
-              </p>
-            ) : (
-              <>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="name">Наименование *</Label>
-                    <Input
-                      id="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                      maxLength={255}
-                      disabled={pending}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="registration_number">Регистрационный номер *</Label>
-                    <Input
-                      id="registration_number"
-                      value={registrationNumber}
-                      onChange={(e) => setRegistrationNumber(e.target.value)}
-                      required
-                      maxLength={128}
-                      disabled={pending}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="hazard_class">Класс опасности *</Label>
-                    <Select value={hazardClass} onValueChange={(v) => setHazardClass(v as HazardClass)}>
-                      <SelectTrigger id="hazard_class"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {HAZARD_CLASSES.map((cls) => (
-                          <SelectItem key={cls.value} value={cls.value}>
-                            {cls.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="address">Адрес *</Label>
-                    <Input
-                      id="address"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      required
-                      maxLength={500}
-                      disabled={pending}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="registration_date">Дата регистрации *</Label>
-                    <Input
-                      id="registration_date"
-                      type="date"
-                      value={registrationDate}
-                      onChange={(e) => setRegistrationDate(e.target.value)}
-                      required
-                      disabled={pending}
-                    />
-                  </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="name">Наименование *</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  maxLength={255}
+                  disabled={pending}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="registration_number">Регистрационный номер *</Label>
+                <Input
+                  id="registration_number"
+                  value={registrationNumber}
+                  onChange={(e) => setRegistrationNumber(e.target.value)}
+                  required
+                  maxLength={100}
+                  disabled={pending}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="hazard_class">Класс опасности *</Label>
+                <Select value={hazardClass} onValueChange={(v) => setHazardClass(v as HazardClass)}>
+                  <SelectTrigger id="hazard_class"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {HAZARD_CLASSES.map((cls) => (
+                      <SelectItem key={cls.value} value={cls.value}>
+                        {cls.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="address">Адрес *</Label>
+                <Input
+                  id="address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  required
+                  maxLength={500}
+                  disabled={pending}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="registration_date">Дата регистрации *</Label>
+                <Input
+                  id="registration_date"
+                  type="date"
+                  value={registrationDate}
+                  onChange={(e) => setRegistrationDate(e.target.value)}
+                  required
+                  disabled={pending}
+                />
+              </div>
+            </div>
+
+            {renderOrganizationSelects()}
+
+            {hazardSigns.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Признаки опасности</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {hazardSigns.map((sign) => (
+                    <label key={sign.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={hazardSignIds.includes(sign.id)}
+                        onChange={() =>
+                          toggleCheckbox(hazardSignIds, sign.id, setHazardSignIds)
+                        }
+                        disabled={pending}
+                      />
+                      <span>{sign.name}</span>
+                    </label>
+                  ))}
                 </div>
-
-                {renderOrganizationSelects()}
-
-                {hazardSigns.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Признаки опасности</p>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {hazardSigns.map((sign) => (
-                        <label key={sign.id} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={hazardSignIds.includes(sign.id)}
-                            onChange={() =>
-                              toggleCheckbox(hazardSignIds, sign.id, setHazardSignIds)
-                            }
-                            disabled={pending}
-                          />
-                          <span>{sign.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {activityTypes.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Виды деятельности</p>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {activityTypes.map((activity) => (
-                        <label key={activity.id} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={activityTypeIds.includes(activity.id)}
-                            onChange={() =>
-                              toggleCheckbox(activityTypeIds, activity.id, setActivityTypeIds)
-                            }
-                            disabled={pending}
-                          />
-                          <span>{activity.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="comment">Комментарий</Label>
-                  <Textarea
-                    id="comment"
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    rows={3}
-                    disabled={pending}
-                  />
-                </div>
-              </>
+              </div>
             )}
+
+            {activityTypes.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Виды деятельности</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {activityTypes.map((activity) => (
+                    <label key={activity.id} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={activityTypeIds.includes(activity.id)}
+                        onChange={() =>
+                          toggleCheckbox(activityTypeIds, activity.id, setActivityTypeIds)
+                        }
+                        disabled={pending}
+                      />
+                      <span>{activity.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="comment">Комментарий</Label>
+              <Textarea
+                id="comment"
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={3}
+                disabled={pending}
+              />
+            </div>
 
             {error && (
               <p className="text-sm text-destructive" role="alert">
@@ -313,7 +332,7 @@ export default function NewOpoPage() {
             )}
 
             <div className="flex gap-3 pt-2">
-              <Button type="submit" disabled={pending || supportingLoading || !!supportingError}>
+              <Button type="submit" disabled={pending}>
                 Создать ОПО
               </Button>
               <Button type="button" variant="outline" asChild>

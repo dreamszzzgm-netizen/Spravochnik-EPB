@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ApiError } from "@/lib/api/errors";
 import { createBuilding, getOpoList } from "@/lib/api/resources";
 import type { BuildingCreatePayload, BuildingType, OPOResponse } from "@/lib/api/types";
+import { useCan } from "@/lib/auth";
 
 const BUILDING_TYPES: { value: BuildingType; label: string }[] = [
   { value: "industrial", label: "Производственное" },
@@ -27,23 +28,23 @@ export default function NewBuildingPage() {
   const params = useParams();
   const router = useRouter();
   const organizationId = params.id as string;
+  const canViewOpo = useCan("opo.view");
 
   const [name, setName] = useState("");
   const [buildingType, setBuildingType] = useState<BuildingType>("other");
   const [opoId, setOpoId] = useState(NO_OPO_ID);
 
   const [opos, setOpos] = useState<OPOResponse[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
+    if (!canViewOpo) return;
+
     getOpoList({ organization_id: organizationId, page: 1, page_size: 100 })
       .then((data) => setOpos(data.items))
-      .catch((e) => setLoadError(e instanceof ApiError ? e.detail : "Ошибка загрузки"))
-      .finally(() => setLoading(false));
-  }, [organizationId]);
+      .catch(() => setOpos([]));
+  }, [canViewOpo, organizationId]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -89,54 +90,46 @@ export default function NewBuildingPage() {
             <CardTitle>Сведения о здании</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {loading ? (
-              <p className="text-sm text-muted-foreground">Загрузка данных...</p>
-            ) : loadError ? (
-              <p className="text-sm text-destructive" role="alert">
-                {loadError}
-              </p>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="name">Наименование *</Label>
-                  <Input
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    required
-                    maxLength={255}
-                    disabled={pending}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="building_type">Тип *</Label>
-                  <Select value={buildingType} onValueChange={(v) => setBuildingType(v as BuildingType)}>
-                    <SelectTrigger id="building_type"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {BUILDING_TYPES.map((type) => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="opo_id">ОПО</Label>
-                  <Select value={opoId} onValueChange={setOpoId}>
-                    <SelectTrigger id="opo_id"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NO_OPO_ID}>Без ОПО</SelectItem>
-                      {opos.map((opo) => (
-                        <SelectItem key={opo.id} value={opo.id}>
-                          {opo.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="name">Наименование *</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  maxLength={255}
+                  disabled={pending}
+                />
               </div>
-            )}
+              <div className="space-y-2">
+                <Label htmlFor="building_type">Тип *</Label>
+                <Select value={buildingType} onValueChange={(v) => setBuildingType(v as BuildingType)}>
+                  <SelectTrigger id="building_type"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {BUILDING_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="opo_id">ОПО</Label>
+                <Select value={opoId} onValueChange={setOpoId}>
+                  <SelectTrigger id="opo_id"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_OPO_ID}>Без ОПО</SelectItem>
+                    {opos.map((opo) => (
+                      <SelectItem key={opo.id} value={opo.id}>
+                        {opo.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
             {error && (
               <p className="text-sm text-destructive" role="alert">
@@ -145,7 +138,7 @@ export default function NewBuildingPage() {
             )}
 
             <div className="flex gap-3 pt-2">
-              <Button type="submit" disabled={pending || loading || !!loadError}>
+              <Button type="submit" disabled={pending}>
                 Создать здание
               </Button>
               <Button type="button" variant="outline" asChild>
