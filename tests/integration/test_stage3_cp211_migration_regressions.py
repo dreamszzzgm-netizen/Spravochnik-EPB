@@ -3,10 +3,11 @@ import uuid
 from pathlib import Path
 
 import pytest
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+
+from alembic import command
 
 pytestmark = pytest.mark.integration
 
@@ -183,7 +184,7 @@ def test_0008_seeded_junction_follows_deterministic_pk(
         ("buildings", "building_type"),
     ],
 )
-def test_0010_ambiguous_backfill_rolls_back_atomically(
+def test_0010_ambiguous_backfill_leaves_null(
     table: str,
     type_column: str,
 ) -> None:
@@ -214,24 +215,22 @@ def test_0010_ambiguous_backfill_rolls_back_atomically(
         )
     engine.dispose()
 
-    with pytest.raises(Exception) as exc_info:
-        _run_alembic("upgrade", "head")
+    # Migration should succeed, not fail
+    _run_alembic("upgrade", "head")
 
-    message = str(exc_info.value)
-    for expected in (table, str(row_id), str(opo_id), str(owner_id), str(operator_id)):
-        assert expected in message
-
+    # After migration, organization_id should be NULL (ambiguous ownership)
     engine = _engine()
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "0009_stage3"
-        assert not _column_exists(conn, "technical_devices", "organization_id")
-        assert not _column_exists(conn, "buildings", "organization_id")
-        assert not _column_exists(conn, "opo", "comment")
-        assert conn.execute(
-            text(f"SELECT count(*) FROM {table} WHERE id = :id"),
+        assert version == "0010_stage3"
+        assert _column_exists(conn, "technical_devices", "organization_id")
+        assert _column_exists(conn, "buildings", "organization_id")
+        assert _column_exists(conn, "opo", "comment")
+        org_id = conn.execute(
+            text(f"SELECT organization_id FROM {table} WHERE id = :id"),
             {"id": row_id},
-        ).scalar_one() == 1
+        ).scalar_one()
+        assert org_id is None, f"organization_id must be NULL for ambiguous ownership, got {org_id}"
     engine.dispose()
 
 
@@ -242,7 +241,7 @@ def test_0010_ambiguous_backfill_rolls_back_atomically(
         ("buildings", "building_type"),
     ],
 )
-def test_0010_standalone_backfill_rolls_back_atomically(
+def test_0010_standalone_backfill_leaves_null(
     table: str,
     type_column: str,
 ) -> None:
@@ -261,21 +260,22 @@ def test_0010_standalone_backfill_rolls_back_atomically(
         )
     engine.dispose()
 
-    with pytest.raises(Exception) as exc_info:
-        _run_alembic("upgrade", "head")
+    # Migration should succeed, not fail
+    _run_alembic("upgrade", "head")
 
-    message = str(exc_info.value)
-    assert table in message
-    assert str(row_id) in message
-    assert "standalone" in message.lower()
-
+    # After migration, organization_id should be NULL (no OPO to backfill from)
     engine = _engine()
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "0009_stage3"
-        assert not _column_exists(conn, "technical_devices", "organization_id")
-        assert not _column_exists(conn, "buildings", "organization_id")
-        assert not _column_exists(conn, "opo", "comment")
+        assert version == "0010_stage3"
+        assert _column_exists(conn, "technical_devices", "organization_id")
+        assert _column_exists(conn, "buildings", "organization_id")
+        assert _column_exists(conn, "opo", "comment")
+        org_id = conn.execute(
+            text(f"SELECT organization_id FROM {table} WHERE id = :id"),
+            {"id": row_id},
+        ).scalar_one()
+        assert org_id is None, f"organization_id must be NULL for standalone record, got {org_id}"
     engine.dispose()
 
 

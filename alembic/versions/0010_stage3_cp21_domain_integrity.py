@@ -72,12 +72,15 @@ def upgrade() -> None:
                 "Cannot backfill organization_id. Fix data first."
             )
 
-    # 5. Safe backfill: use owner_organization_id as deterministic source
+    # 5. Safe backfill: ONLY when owner_organization_id == operating_organization_id
+    # If they differ, organization_id remains NULL (ambiguous ownership)
     for table in ["technical_devices", "buildings"]:
         conn.execute(
             text(
                 f"UPDATE {table} SET organization_id = opo.owner_organization_id "
-                f"FROM opo WHERE opo.id = {table}.opo_id AND {table}.opo_id IS NOT NULL"
+                f"FROM opo WHERE opo.id = {table}.opo_id "
+                f"AND {table}.opo_id IS NOT NULL "
+                f"AND opo.owner_organization_id = opo.operating_organization_id"
             )
         )
 

@@ -14,6 +14,11 @@ class BuildingNotFoundError(Exception):
     pass
 
 
+class BuildingOrganizationError(Exception):
+    """Raised when organization_id is invalid (e.g., explicitly set to None)."""
+    pass
+
+
 class BuildingService:
     @staticmethod
     def _now() -> datetime:
@@ -100,12 +105,13 @@ class BuildingService:
             changed.append("opo_id")
 
         if organization_id_provided and organization_id != building.organization_id:
-            if organization_id is not None:
-                org = get_organization(db, organization_id)
-                if org is None:
-                    raise BuildingNotFoundError("Organization not found")
-                if org.deleted_at is not None:
-                    raise BuildingNotFoundError("Organization is deleted")
+            if organization_id is None:
+                raise BuildingOrganizationError("organization_id cannot be set to None")
+            org = get_organization(db, organization_id)
+            if org is None:
+                raise BuildingNotFoundError("Organization not found")
+            if org.deleted_at is not None:
+                raise BuildingNotFoundError("Organization is deleted")
             building.organization_id = organization_id
             changed.append("organization_id")
 

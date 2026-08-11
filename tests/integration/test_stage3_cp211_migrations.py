@@ -256,9 +256,9 @@ def test_0010_backfills_when_owner_equals_operator() -> None:
 
 
 # ============================================================================
-# Case C — owner != operator: backfill from owner_organization_id only
+# Case C - owner != operator: backfill does NOT occur, organization_id stays NULL
 # ============================================================================
-def test_0010_backfills_from_owner_when_owner_differs_from_operator() -> None:
+def test_0010_backfills_null_when_owner_differs_from_operator() -> None:
     engine = _migrate_to("0009_stage3")
 
     with engine.connect() as conn, conn.begin():
@@ -274,18 +274,17 @@ def test_0010_backfills_from_owner_when_owner_differs_from_operator() -> None:
         conn.commit()
 
     engine.dispose()
-
     engine2 = _upgrade_to("head")
 
     with engine2.connect() as conn:
         result = conn.execute(text(
             "SELECT organization_id FROM technical_devices WHERE id = :id"
         ), {"id": td_id}).scalar()
-        assert str(result) == owner_org, (
-            f"must backfill from owner_organization_id ({owner_org}), "
-            f"not operator ({op_org}), got {result}"
+        assert result is None, (
+            f"when owner != operator, organization_id must remain NULL, got {result}"
         )
     engine2.dispose()
+
 
 
 # ============================================================================
