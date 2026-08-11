@@ -4,7 +4,6 @@ from decimal import Decimal
 
 import pytest
 import sqlalchemy as sa
-from app.modules.contracts.service import ContractService, ContractValidationError
 from sqlalchemy.orm import Session
 
 from app.modules.buildings.models import Building, BuildingType
@@ -14,6 +13,7 @@ from app.modules.contracts.models import (
     ContractResponsible,
     ContractStatus,
 )
+from app.modules.contracts.service import ContractService, ContractValidationError
 from app.modules.identity.models import AuditEvent, Employee
 from app.modules.organizations.models import (
     ContactType,
