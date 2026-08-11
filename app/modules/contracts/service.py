@@ -78,6 +78,7 @@ class ContractService:
                 entity_type="contract",
                 entity_id=contract.id,
                 summary=f"Создан договор {contract.number}",
+                result="success",
             )
             db.commit()
             db.refresh(contract)
@@ -124,6 +125,7 @@ class ContractService:
                 entity_type="contract",
                 entity_id=contract.id,
                 summary=f"Изменён договор {contract.number}",
+                result="success",
             )
             db.commit()
             db.refresh(contract)
@@ -152,6 +154,7 @@ class ContractService:
                 entity_type="contract",
                 entity_id=contract.id,
                 summary=f"Удалён договор {contract.number}",
+                result="success",
             )
             db.commit()
         except Exception:
@@ -178,6 +181,7 @@ class ContractService:
                 entity_type="contract",
                 entity_id=contract.id,
                 summary=f"Восстановлен договор {contract.number}",
+                result="success",
             )
             db.commit()
         except Exception:
@@ -217,6 +221,7 @@ class ContractService:
                 entity_type="contract",
                 entity_id=contract.id,
                 summary=f"Обновлены ответственные договора {contract.number}",
+                result="success",
             )
             db.commit()
         except Exception:
@@ -274,6 +279,7 @@ class ContractService:
                 entity_type="contract_item",
                 entity_id=item.id,
                 summary=f"Добавлен предмет договора: {item.name}",
+                result="success",
             )
             db.commit()
             db.refresh(item)
@@ -330,6 +336,7 @@ class ContractService:
                 entity_type="contract_item",
                 entity_id=item.id,
                 summary=f"Изменён предмет договора: {item.name}",
+                result="success",
             )
             db.commit()
             db.refresh(item)
@@ -361,6 +368,7 @@ class ContractService:
                 entity_type="contract_item",
                 entity_id=item.id,
                 summary=f"Удалён предмет договора: {item.name}",
+                result="success",
             )
             db.commit()
             db.refresh(contract)
@@ -542,7 +550,9 @@ class ContractService:
     @staticmethod
     def _recalculate_amount(db: Session, contract: Contract) -> None:
         total = db.scalar(
-            sa.select(sa.func.coalesce(sa.func.sum(ContractItem.price), Decimal("0.00"))).where(
+            sa.select(
+                sa.func.coalesce(sa.func.sum(ContractItem.price), Decimal("0.00"))
+            ).where(
                 ContractItem.contract_id == contract.id,
                 ContractItem.deleted_at.is_(None),
             )
