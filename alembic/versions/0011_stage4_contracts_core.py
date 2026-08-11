@@ -36,7 +36,11 @@ CONTRACT_STATUS_VALUES = (
 
 def upgrade() -> None:
     bind = op.get_bind()
-    contract_status = postgresql.ENUM(*CONTRACT_STATUS_VALUES, name="contract_status")
+    contract_status = postgresql.ENUM(
+        *CONTRACT_STATUS_VALUES,
+        name="contract_status",
+        create_type=False,
+    )
     contract_status.create(bind, checkfirst=True)
 
     expertise_types = op.create_table(
@@ -274,5 +278,9 @@ def downgrade() -> None:
 
     op.drop_table("expertise_types")
 
-    contract_status = postgresql.ENUM(*CONTRACT_STATUS_VALUES, name="contract_status")
+    contract_status = postgresql.ENUM(
+        *CONTRACT_STATUS_VALUES,
+        name="contract_status",
+        create_type=False,
+    )
     contract_status.drop(op.get_bind(), checkfirst=True)
