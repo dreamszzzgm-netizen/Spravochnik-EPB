@@ -54,6 +54,7 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 extend-immutable-calls = [
   "fastapi.Depends",
   "app.modules.identity.dependencies.require_permission",
+  "app.modules.identity.dependencies.require_scoped_permission",
 ]
 
 [tool.coverage.run]

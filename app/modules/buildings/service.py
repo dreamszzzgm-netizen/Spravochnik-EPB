@@ -85,6 +85,42 @@ class BuildingService:
         organization_id: uuid.UUID | None = None,
         organization_id_provided: bool = False,
     ) -> Building:
+        relation_changed = organization_id_provided or opo_id_provided
+        final_organization_id = (
+            organization_id if organization_id_provided else building.organization_id
+        )
+        final_opo_id = opo_id if opo_id_provided else building.opo_id
+
+        if organization_id_provided:
+            if organization_id is None:
+                raise BuildingOrganizationError("organization_id cannot be set to None")
+            org = get_organization(db, organization_id)
+            if org is None:
+                raise BuildingNotFoundError("Organization not found")
+            if org.deleted_at is not None:
+                raise BuildingNotFoundError("Organization is deleted")
+
+        if opo_id_provided and final_opo_id is not None:
+            opo = get_opo(db, final_opo_id)
+            if opo is None:
+                raise BuildingNotFoundError("OPO not found")
+            if opo.deleted_at is not None:
+                raise BuildingNotFoundError("OPO is deleted")
+
+        if (
+            relation_changed
+            and final_opo_id is not None
+            and final_organization_id is not None
+        ):
+            opo = get_opo(db, final_opo_id)
+            if (
+                opo is not None
+                and opo.deleted_at is None
+                and opo.owner_organization_id != final_organization_id
+                and opo.operating_organization_id != final_organization_id
+            ):
+                raise BuildingNotFoundError("OPO does not belong to this organization")
+
         changed: list[str] = []
 
         if name is not None and name != building.name:
@@ -93,42 +129,12 @@ class BuildingService:
         if building_type is not None and building_type != building.building_type:
             building.building_type = building_type
             changed.append("building_type")
-
         if opo_id_provided and opo_id != building.opo_id:
-            if opo_id is not None:
-                opo = get_opo(db, opo_id)
-                if opo is None:
-                    raise BuildingNotFoundError("OPO not found")
-                if opo.deleted_at is not None:
-                    raise BuildingNotFoundError("OPO is deleted")
             building.opo_id = opo_id
             changed.append("opo_id")
-
         if organization_id_provided and organization_id != building.organization_id:
-            if organization_id is None:
-                raise BuildingOrganizationError("organization_id cannot be set to None")
-            org = get_organization(db, organization_id)
-            if org is None:
-                raise BuildingNotFoundError("Organization not found")
-            if org.deleted_at is not None:
-                raise BuildingNotFoundError("Organization is deleted")
             building.organization_id = organization_id
             changed.append("organization_id")
-
-        final_org_id = building.organization_id
-        final_opo_id = building.opo_id
-        if opo_id_provided:
-            final_opo_id = opo_id
-
-        if final_opo_id is not None:
-            opo = get_opo(db, final_opo_id)
-            if (
-                opo is not None
-                and opo.deleted_at is None
-                and opo.owner_organization_id != final_org_id
-                and opo.operating_organization_id != final_org_id
-            ):
-                raise BuildingNotFoundError("OPO does not belong to this organization")
 
         if changed:
             write_audit(
