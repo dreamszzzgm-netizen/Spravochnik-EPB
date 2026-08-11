@@ -1,4 +1,4 @@
-from sqlalchemy import inspect, text
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 
@@ -13,11 +13,11 @@ EXPECTED_STAGE4_TABLES = {
 
 
 def _table_names(db_session: Session) -> set[str]:
-    return set(inspect(db_session.get_bind()).get_table_names())
+    return set(sa.inspect(db_session.get_bind()).get_table_names())
 
 
 def test_stage4_contract_tables_exist(db_session: Session) -> None:
-    assert EXPECTED_STAGE4_TABLES <= _table_names(db_session)
+    assert _table_names(db_session) >= EXPECTED_STAGE4_TABLES
 
 
 def test_stage4_contract_scalar_checks_exist(db_session: Session) -> None:
@@ -25,7 +25,7 @@ def test_stage4_contract_scalar_checks_exist(db_session: Session) -> None:
     assert "contracts" in table_names
     assert "contract_items" in table_names
 
-    inspector = inspect(db_session.get_bind())
+    inspector = sa.inspect(db_session.get_bind())
     contract_checks = {
         item["name"] for item in inspector.get_check_constraints("contracts")
     }
@@ -43,7 +43,7 @@ def test_stage4_subject_junctions_have_real_foreign_keys(db_session: Session) ->
     assert "contract_item_technical_devices" in table_names
     assert "contract_item_buildings" in table_names
 
-    inspector = inspect(db_session.get_bind())
+    inspector = sa.inspect(db_session.get_bind())
 
     td_targets = {
         (fk["referred_table"], tuple(fk["referred_columns"]))
@@ -63,7 +63,7 @@ def test_stage4_subject_junctions_have_real_foreign_keys(db_session: Session) ->
 def test_stage4_contract_status_enum_is_complete(db_session: Session) -> None:
     assert "contracts" in _table_names(db_session)
     values = db_session.execute(
-        text(
+        sa.text(
             """
             SELECT enumlabel
             FROM pg_enum
@@ -89,7 +89,7 @@ def test_stage4_contract_status_enum_is_complete(db_session: Session) -> None:
 def test_stage4_expertise_type_seed_is_deterministic(db_session: Session) -> None:
     assert "expertise_types" in _table_names(db_session)
     rows = db_session.execute(
-        text("SELECT id::text, code, name FROM expertise_types ORDER BY code")
+        sa.text("SELECT id::text, code, name FROM expertise_types ORDER BY code")
     ).all()
 
     assert rows == [
