@@ -30,3 +30,33 @@ export function userInitials(username: string): string {
   if (parts.length > 1) return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase();
   return username.slice(0, 2).toUpperCase();
 }
+
+export function hazardClassLabel(hazardClass: string): string {
+  const labels: Record<string, string> = {
+    hazard_class_1: "I класс опасности",
+    hazard_class_2: "II класс опасности",
+    hazard_class_3: "III класс опасности",
+    hazard_class_4: "IV класс опасности",
+  };
+  return labels[hazardClass] ?? hazardClass;
+}
+
+export function technicalDeviceTypeLabel(deviceType: string): string {
+  const labels: Record<string, string> = {
+    pressure_vessel: "Сосуд под давлением",
+    pipeline: "Трубопровод",
+    lifting_mechanism: "Подъёмное сооружение",
+    other: "Другое",
+  };
+  return labels[deviceType] ?? deviceType;
+}
+
+export function buildingTypeLabel(buildingType: string): string {
+  const labels: Record<string, string> = {
+    industrial: "Производственное",
+    warehouse: "Складское",
+    administrative: "Административное",
+    other: "Другое",
+  };
+  return labels[buildingType] ?? buildingType;
+}

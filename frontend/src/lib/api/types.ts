@@ -107,3 +107,114 @@ export interface OrganizationPaginatedResponse {
   page: number;
   page_size: number;
 }
+
+export interface OPOResponse {
+  id: string;
+  name: string;
+  registration_number: string;
+  hazard_class: string;
+  address: string;
+  registration_date: string;
+  owner_organization_id: string;
+  operating_organization_id: string;
+  deleted_at: string | null;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OPOPaginatedResponse {
+  items: OPOResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface TechnicalDeviceResponse {
+  id: string;
+  name: string;
+  device_type: string;
+  serial_number: string | null;
+  opo_id: string | null;
+  organization_id: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TechnicalDevicePaginatedResponse {
+  items: TechnicalDeviceResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface BuildingResponse {
+  id: string;
+  name: string;
+  building_type: string;
+  opo_id: string | null;
+  organization_id: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BuildingPaginatedResponse {
+  items: BuildingResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface ReferenceItemResponse {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export type HazardClass =
+  | "hazard_class_1"
+  | "hazard_class_2"
+  | "hazard_class_3"
+  | "hazard_class_4";
+
+export type TechnicalDeviceType =
+  | "pressure_vessel"
+  | "pipeline"
+  | "lifting_mechanism"
+  | "other";
+
+export type BuildingType =
+  | "industrial"
+  | "warehouse"
+  | "administrative"
+  | "other";
+
+export interface OPOCreatePayload {
+  name: string;
+  registration_number: string;
+  hazard_class: HazardClass;
+  address: string;
+  registration_date: string;
+  owner_organization_id: string;
+  operating_organization_id: string;
+  hazard_sign_ids: string[];
+  activity_type_ids: string[];
+  comment: string | null;
+}
+
+export interface TechnicalDeviceCreatePayload {
+  name: string;
+  device_type: TechnicalDeviceType;
+  serial_number: string | null;
+  opo_id: string | null;
+  organization_id: string;
+}
+
+export interface BuildingCreatePayload {
+  name: string;
+  building_type: BuildingType;
+  opo_id: string | null;
+  organization_id: string;
+}
