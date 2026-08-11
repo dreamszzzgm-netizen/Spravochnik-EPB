@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.modules.identity.models import (
     Permission,
     RolePermission,
+    ScopeType,
     User,
     UserRoleAssignment,
     UserSession,
@@ -48,6 +50,49 @@ def permission_scopes(db: Session, user_id: uuid.UUID, permission_code: str) -> 
         .distinct()
     )
     return [scope.value for scope in db.scalars(stmt).all()]
+
+
+def get_active_permission_scope_grants(
+    db: Session,
+    user_id: uuid.UUID,
+    permission_code: str,
+) -> list[
+    tuple[
+        ScopeType,
+        dict[str, Any] | None,
+    ]
+]:
+    stmt = (
+        select(
+            UserRoleAssignment.scope_type,
+            UserRoleAssignment.scope_config,
+        )
+        .join(
+            RolePermission,
+            RolePermission.role_id == UserRoleAssignment.role_id,
+        )
+        .join(
+            Permission,
+            Permission.id == RolePermission.permission_id,
+        )
+        .where(
+            UserRoleAssignment.user_id == user_id,
+            UserRoleAssignment.revoked_at.is_(None),
+            Permission.code == permission_code,
+        )
+        .order_by(
+            UserRoleAssignment.id.asc()
+        )
+    )
+
+    return [
+        (
+            scope_type,
+            scope_config,
+        )
+        for scope_type, scope_config
+        in db.execute(stmt)
+    ]
 
 
 def get_user_permission_codes(db: Session, user_id: uuid.UUID) -> list[str]:

@@ -5,8 +5,15 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.database.session import get_db
+from app.modules.identity.authorization import (
+    AuthorizationContext,
+    build_authorization_context,
+)
 from app.modules.identity.models import ScopeType, User
-from app.modules.identity.repository import permission_scopes
+from app.modules.identity.repository import (
+    get_active_permission_scope_grants,
+    permission_scopes,
+)
 from app.modules.identity.service import AuthService, SessionExpiredError
 
 
@@ -56,3 +63,37 @@ def get_permission_scopes_for_user(
     if user.is_superuser:
         return {ScopeType.ALL}
     return {ScopeType(value) for value in permission_scopes(db, user.id, permission_code)}
+
+
+def require_scoped_permission(
+    permission_code: str,
+) -> Callable:
+    def dependency(
+        user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> AuthorizationContext:
+        if user.is_superuser:
+            return build_authorization_context(
+                user=user,
+                permission_code=permission_code,
+                grants=[],
+            )
+
+        grants = get_active_permission_scope_grants(
+            db,
+            user_id=user.id,
+            permission_code=permission_code,
+        )
+        if not grants:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission denied",
+            )
+
+        return build_authorization_context(
+            user=user,
+            permission_code=permission_code,
+            grants=grants,
+        )
+
+    return dependency
