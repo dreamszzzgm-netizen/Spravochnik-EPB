@@ -13,8 +13,6 @@ from app.modules.identity.dependencies import (
     get_session_token,
     require_permission,
 )
-from app.modules.identity.repository import get_user_permission_codes
-
 from app.modules.identity.models import (
     Employee,
     EmployeeFunctionRole,
@@ -25,6 +23,7 @@ from app.modules.identity.models import (
     User,
     UserRoleAssignment,
 )
+from app.modules.identity.repository import get_user_permission_codes
 from app.modules.identity.schemas import (
     AdminPasswordResetRequest,
     ChangePasswordRequest,
