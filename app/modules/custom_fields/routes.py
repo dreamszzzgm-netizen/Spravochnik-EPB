@@ -26,6 +26,7 @@ from app.modules.identity.dependencies import (
     require_permission,
     require_scoped_permission,
 )
+from app.modules.identity.models import User
 from app.modules.opo.repository import get_opo
 from app.modules.technical_devices.repository import get_technical_device
 
@@ -86,9 +87,7 @@ def _parent_or_404(
 )
 def read_definitions(
     entity_type: str | None = Query(None),
-    _actor: AuthorizationContext = Depends(
-        require_permission("custom_fields.manage")
-    ),
+    _actor: User = Depends(require_permission("custom_fields.manage")),
     db: Session = Depends(get_db),
 ):
     return service.list_definitions(db, entity_type=entity_type)
