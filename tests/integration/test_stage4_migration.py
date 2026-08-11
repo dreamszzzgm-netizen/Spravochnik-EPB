@@ -1,5 +1,4 @@
 import sqlalchemy as sa
-from sqlalchemy.orm import Session
 
 
 EXPECTED_STAGE4_TABLES = {
@@ -12,15 +11,15 @@ EXPECTED_STAGE4_TABLES = {
 }
 
 
-def _table_names(db_session: Session) -> set[str]:
+def _table_names(db_session) -> set[str]:
     return set(sa.inspect(db_session.get_bind()).get_table_names())
 
 
-def test_stage4_contract_tables_exist(db_session: Session) -> None:
+def test_stage4_contract_tables_exist(db_session) -> None:
     assert _table_names(db_session) >= EXPECTED_STAGE4_TABLES
 
 
-def test_stage4_contract_scalar_checks_exist(db_session: Session) -> None:
+def test_stage4_contract_scalar_checks_exist(db_session) -> None:
     table_names = _table_names(db_session)
     assert "contracts" in table_names
     assert "contract_items" in table_names
@@ -38,7 +37,7 @@ def test_stage4_contract_scalar_checks_exist(db_session: Session) -> None:
     assert "ck_contract_items_price_nonnegative" in item_checks
 
 
-def test_stage4_subject_junctions_have_real_foreign_keys(db_session: Session) -> None:
+def test_stage4_subject_junctions_have_real_foreign_keys(db_session) -> None:
     table_names = _table_names(db_session)
     assert "contract_item_technical_devices" in table_names
     assert "contract_item_buildings" in table_names
@@ -60,7 +59,7 @@ def test_stage4_subject_junctions_have_real_foreign_keys(db_session: Session) ->
     assert ("buildings", ("id",)) in building_targets
 
 
-def test_stage4_contract_status_enum_is_complete(db_session: Session) -> None:
+def test_stage4_contract_status_enum_is_complete(db_session) -> None:
     assert "contracts" in _table_names(db_session)
     values = db_session.execute(
         sa.text(
@@ -86,7 +85,7 @@ def test_stage4_contract_status_enum_is_complete(db_session: Session) -> None:
     ]
 
 
-def test_stage4_expertise_type_seed_is_deterministic(db_session: Session) -> None:
+def test_stage4_expertise_type_seed_is_deterministic(db_session) -> None:
     assert "expertise_types" in _table_names(db_session)
     rows = db_session.execute(
         sa.text("SELECT id::text, code, name FROM expertise_types ORDER BY code")
