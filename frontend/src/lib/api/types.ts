@@ -107,3 +107,62 @@ export interface OrganizationPaginatedResponse {
   page: number;
   page_size: number;
 }
+
+export interface OPOResponse {
+  id: string;
+  name: string;
+  registration_number: string;
+  hazard_class: string;
+  address: string;
+  registration_date: string;
+  owner_organization_id: string;
+  operating_organization_id: string;
+  deleted_at: string | null;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OPOPaginatedResponse {
+  items: OPOResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface TechnicalDeviceResponse {
+  id: string;
+  name: string;
+  device_type: string;
+  serial_number: string | null;
+  opo_id: string | null;
+  organization_id: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TechnicalDevicePaginatedResponse {
+  items: TechnicalDeviceResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface BuildingResponse {
+  id: string;
+  name: string;
+  building_type: string;
+  opo_id: string | null;
+  organization_id: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BuildingPaginatedResponse {
+  items: BuildingResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}

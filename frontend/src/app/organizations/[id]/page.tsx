@@ -15,6 +15,9 @@ import type { OrganizationResponse, OrganizationIdentifierResponse } from "@/lib
 import { organizationName, organizationTypeLabel } from "@/lib/api/view-models";
 import { useCan } from "@/lib/auth";
 import { OrganizationContacts } from "./_components/organization-contacts";
+import { OrganizationOpoList } from "./_components/organization-opo-list";
+import { OrganizationDeviceList } from "./_components/organization-device-list";
+import { OrganizationBuildingList } from "./_components/organization-building-list";
 
 export default function OrganizationWorkspacePage() {
   const params = useParams();
@@ -179,7 +182,19 @@ export default function OrganizationWorkspacePage() {
           <OrganizationContacts organizationId={id} />
         </TabsContent>
 
-        {["opo", "devices", "buildings", "contracts"].map((tab) => (
+        <TabsContent value="opo" className="mt-4">
+          <OrganizationOpoList organizationId={id} />
+        </TabsContent>
+
+        <TabsContent value="devices" className="mt-4">
+          <OrganizationDeviceList organizationId={id} />
+        </TabsContent>
+
+        <TabsContent value="buildings" className="mt-4">
+          <OrganizationBuildingList organizationId={id} />
+        </TabsContent>
+
+        {["contracts"].map((tab) => (
           <TabsContent key={tab} value={tab} className="mt-4">
             <Card>
               <CardContent className="py-12 text-center text-sm text-muted-foreground">
