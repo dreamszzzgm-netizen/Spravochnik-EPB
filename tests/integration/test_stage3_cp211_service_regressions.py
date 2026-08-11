@@ -157,8 +157,7 @@ class TestTechnicalDeviceServiceOrganizationInvariant:
         actor_id = uuid.UUID(test_user["id"])
 
         # Attempt to set organization_id to None explicitly
-        # Current implementation: get_organization(db, None) returns None,
-        # raises "Organization not found"
+        # CP2.2-D: service now rejects None before calling get_organization
         with pytest.raises(TechnicalDeviceNotFoundError) as exc_info:
             service.update_technical_device(
                 db_session,
@@ -168,7 +167,7 @@ class TestTechnicalDeviceServiceOrganizationInvariant:
                 organization_id_provided=True,
             )
 
-        assert "Organization not found" in str(exc_info.value)
+        assert "organization_id cannot be null" in str(exc_info.value)
 
         # Verify organization_id was NOT changed
         db_session.refresh(device)
