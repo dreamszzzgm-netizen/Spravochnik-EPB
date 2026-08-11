@@ -15,7 +15,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`. Production verification:
+Open `http://localhost:3100`. Port `3100` is the default frontend port so local tooling can use `3000` without conflicting with Spravoshnik EPB. Production verification:
 
 ```powershell
 npm test
