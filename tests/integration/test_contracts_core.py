@@ -13,7 +13,6 @@ from app.modules.contracts.models import (
     ContractItemBuilding,
     ContractItemTechnicalDevice,
     ContractResponsible,
-    ExpertiseType,
 )
 from app.modules.contracts.service import ContractService, ContractValidationError
 from app.modules.identity.models import AuditEvent, Employee
