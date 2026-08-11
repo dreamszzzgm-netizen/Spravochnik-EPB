@@ -2,43 +2,44 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Close Stage 3 authorization with one focused PostgreSQL integration regression matrix proving final authentication, permission, scope-isolation, fail-closed, reference-resource, and non-enumeration invariants.
+**Goal:** Close Stage 3 authorization with one PostgreSQL integration regression matrix proving authentication, requested-permission isolation, fail-closed scope handling, global reference boundaries, and non-enumeration.
 
-**Architecture:** Keep all existing Stage 3 production authorization boundaries intact and add one independently readable matrix under `tests/integration`. Production code is not expected to change; `app/modules/opo/reference_routes.py` is the only allowed production file and may be modified only if a new failing CP2.2-F test proves a real reference-permission defect. Any defect elsewhere is a blocker/new focused fix, not scope for this checkpoint.
+**Architecture:** Keep the current Stage 3 authorization implementation unchanged unless the new matrix proves a real defect in the one explicitly allowed production file, `app/modules/opo/reference_routes.py`. The checkpoint creates one focused integration test module. Any defect in Organizations, OPO, Technical Devices, Buildings, Custom Fields, Identity, repositories, migrations, or frontend is reported as a blocker and handled in a separate focused checkpoint.
 
-**Tech Stack:** Python 3.12+, FastAPI, SQLAlchemy 2.x, PostgreSQL 17, pytest, Ruff, Alembic.
+**Tech Stack:** Python 3.12+, FastAPI, SQLAlchemy 2.x, PostgreSQL 17, pytest, Ruff, Alembic, GitHub Actions.
 
 ## Global Constraints
 
 - Repository: `dreamszzzgm-netizen/Spravochnik-EPB`.
 - Branch: `agent/stage3-cp22f-authorization-closure`.
 - Verified baseline: `1445d8a2f9364c47a590a52e64e429bdd953cf75`.
-- Alembic must remain exactly `0010_stage3`.
-- PostgreSQL integration tests must execute with `TEST_DATABASE_URL`; skipped integration tests are not acceptable.
+- Alembic head/current must remain `0010_stage3`.
+- Integration verification must use a real PostgreSQL test database with `TEST_DATABASE_URL`; skipped integration tests are not acceptable.
+- CI already runs on every push with PostgreSQL 17, Ruff, Alembic upgrade, and full pytest.
 - Do not modify `frontend/**`.
-- Do not modify Alembic migrations or database schema.
-- Do not add permissions, aliases, scope types, deny roles, or new business behavior.
-- `401`: unauthenticated or invalid session.
-- `403`: authenticated user lacks the requested permission.
-- `404`: object is absent/deleted or exists outside the requested action's allowed scope.
-- `RELATED` remains strict and fail-closed.
-- `ASSIGNED` and `OWN` remain deny-by-default for Stage 3 organization-owned domain entities.
-- Authorization scope must be computed only from grants that contain the permission requested by the current action.
-- Global reference endpoints and custom-field definitions remain permission-only resources, not organization-scoped.
-- Custom-field values remain parent-scoped through CP2.2-E.
-- Do not merge, cherry-pick, rebase, or force-push old pilot branches into this branch.
+- Do not modify `alembic/**` or database schema.
+- Do not add permissions, aliases, scope types, deny-role semantics, or new business behavior.
+- `401` means no valid authenticated session.
+- `403` means authenticated user lacks the requested permission.
+- `404` means scoped domain object is absent/deleted or outside the requested action's usable scope.
+- `RELATED` stays strict and fail-closed.
+- `ASSIGNED` and `OWN` stay deny-by-default for Stage 3 organization-owned domain entities.
+- Scope is built only from grants that contain the permission requested by the current action.
+- Reference endpoints and custom-field definitions are global permission-only resources.
+- Custom-field values stay parent-scoped.
+- Do not merge/cherry-pick/rebase the old `pilot/opencode-cp22c` branch.
 
 ---
 
 ## File Map
 
 **Create**
-- `tests/integration/test_stage3_cp22f_authorization_matrix.py` — the complete cross-module authorization closure matrix.
+- `tests/integration/test_stage3_cp22f_authorization_matrix.py` — complete closure matrix.
 
-**Modify only if a new RED proves a real reference-route bug**
-- `app/modules/opo/reference_routes.py` — existing global reference permission boundary only.
+**Modify only if a new failing matrix test proves a real reference-permission bug**
+- `app/modules/opo/reference_routes.py`.
 
-**Do not modify**
+**Out of scope for production edits**
 - `app/modules/identity/**`
 - `app/modules/organizations/**`
 - `app/modules/technical_devices/**`
@@ -47,24 +48,20 @@
 - `alembic/**`
 - `frontend/**`
 
-If the matrix proves a defect in one of the prohibited modules, stop CP2.2-F as `BLOCKED` and report the exact failing invariant.
-
 ---
 
-### Task 1: Create independently readable authorization matrix fixtures
+### Task 1: Build self-contained test fixtures
 
 **Files:**
 - Create: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
 
 **Interfaces:**
-- Consumes seeded permission rows used by existing Stage 3 integration tests.
+- Consumes seeded permission rows.
 - Consumes `Employee`, `User`, `Role`, `RolePermission`, `UserRoleAssignment`, `ScopeType`.
-- Consumes `Organization`, `OPO`, `TechnicalDevice`, `Building`, `CustomFieldDefinition`, `CustomFieldValue`.
-- Produces only local test helpers; no production interface.
+- Consumes `Organization`, `OPO`, `TechnicalDevice`, `Building`, `CustomFieldDefinition`.
+- Produces local helpers only.
 
 - [ ] **Step 1: Add imports and integration marker**
-
-Start the new file with the concrete imports already established by CP2.2-E:
 
 ```python
 import uuid
@@ -76,11 +73,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.buildings.enums import BuildingType
 from app.modules.buildings.models import Building
-from app.modules.custom_fields.models import (
-    CustomFieldDefinition,
-    CustomFieldType,
-    CustomFieldValue,
-)
+from app.modules.custom_fields.models import CustomFieldDefinition, CustomFieldType
 from app.modules.identity.models import (
     Employee,
     Role,
@@ -100,9 +93,7 @@ from app.modules.technical_devices.models import TechnicalDevice
 pytestmark = pytest.mark.integration
 ```
 
-- [ ] **Step 2: Add user, grant, and token helpers**
-
-Use exactly this contract:
+- [ ] **Step 2: Add identity helpers**
 
 ```python
 def _create_user(
@@ -138,7 +129,6 @@ def _grant(
     role = Role(code=role_code, name=role_code, is_system=False)
     db.add(role)
     db.flush()
-
     perm_id = db.scalar(
         text("SELECT id FROM permissions WHERE code = :code"),
         {"code": permission_code},
@@ -168,13 +158,13 @@ def _token(db: Session, user: User) -> str:
         ip_address="127.0.0.1",
         user_agent="cp22f-test",
     ).token
+
+
+def _auth(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
 ```
 
-Unique `role_code` values are required per `_grant` call so one test can deliberately attach different permissions/scopes to different roles.
-
 - [ ] **Step 3: Add domain factories**
-
-Use direct model creation so test setup never depends on the HTTP permission currently under test:
 
 ```python
 def _organization(db: Session, name: str) -> Organization:
@@ -243,28 +233,23 @@ def _building(
     db.add(building)
     db.flush()
     return building
-```
 
-- [ ] **Step 4: Add custom-field factories/count helper**
 
-```python
-def _cf_definition(
-    db: Session,
-    *,
-    code: str,
-    entity_type: str = "opo",
-) -> CustomFieldDefinition:
+def _cf_definition(db: Session, *, code: str) -> CustomFieldDefinition:
     definition = CustomFieldDefinition(
         code=code,
         name=f"Field {code}",
-        entity_type=entity_type,
+        entity_type="opo",
         field_type=CustomFieldType.TEXT,
     )
     db.add(definition)
     db.flush()
     return definition
+```
 
+- [ ] **Step 4: Add value-count helper for mutation denial proof**
 
+```python
 def _cf_value_count(
     db: Session,
     *,
@@ -284,43 +269,32 @@ def _cf_value_count(
     )
 ```
 
-- [ ] **Step 5: Verify collection before behavior work**
-
-Run locally with the real test DB enabled:
+- [ ] **Step 5: Verify collection locally**
 
 ```powershell
 $env:TEST_DATABASE_URL = "postgresql+psycopg://spravoshnik:spravoshnik@127.0.0.1:5433/spravoshnik_test"
 python -m pytest tests/integration/test_stage3_cp22f_authorization_matrix.py --collect-only -q
 ```
 
-Expected: collection succeeds; no import or fixture errors; no integration skip.
+Expected: collection succeeds and nothing is skipped.
 
-- [ ] **Step 6: Commit the fixture skeleton only if working locally**
-
-For local/agentic execution use:
-
-```powershell
-git add tests/integration/test_stage3_cp22f_authorization_matrix.py
-git commit -m "test(stage3 cp2.2-f): scaffold authorization matrix"
-```
-
-For GitHub-first execution, this intermediate commit may be folded into the completed test-file commit because the remote authoring environment cannot execute pytest between commits. The verification report must state that RED/GREEN execution occurred later on the user's PostgreSQL test environment.
+For GitHub-first authoring, the completed test file may be committed before local RED/GREEN execution; GitHub Actions and the user's local PostgreSQL verification provide execution evidence.
 
 ---
 
-### Task 2: Prove global reference-data permission boundaries
+### Task 2: Prove global reference permission boundaries
 
 **Files:**
 - Test: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
-- Modify only if RED proves a bug: `app/modules/opo/reference_routes.py`
+- Possible production file: `app/modules/opo/reference_routes.py`
 
 **Interfaces:**
-- `GET /api/reference/hazard-signs` -> permission `opo.view`.
-- `GET /api/reference/activity-types` -> permission `opo.view`.
-- `GET /api/reference/technical-device-types` -> permission `technical_devices.view`.
-- `GET /api/reference/building-types` -> permission `buildings.view`.
+- `GET /api/reference/hazard-signs` -> `opo.view`.
+- `GET /api/reference/activity-types` -> `opo.view`.
+- `GET /api/reference/technical-device-types` -> `technical_devices.view`.
+- `GET /api/reference/building-types` -> `buildings.view`.
 
-- [ ] **Step 1: Add a parameter table for reference endpoints**
+- [ ] **Step 1: Add exact reference case table**
 
 ```python
 REFERENCE_CASES = [
@@ -335,72 +309,36 @@ REFERENCE_CASES = [
 ]
 ```
 
-- [ ] **Step 2: Add unauthenticated and wrong-permission reference tests**
+- [ ] **Step 2: Add 401 and 403 reference tests**
 
-Parameterize `REFERENCE_CASES` and assert:
+For every row assert unauthenticated `GET` returns `401`. Then create a user granted only `wrong_permission + ALL`; authenticated `GET` must return `403`.
 
-```python
-response = client.get(path)
-assert response.status_code == 401
-```
+- [ ] **Step 3: Prove matching permission ignores organization scope**
 
-Then create a user with only the `wrong_permission`, authenticate, call the same endpoint, and assert exactly `403`.
+Parameterize `ScopeType.ALL`, `RELATED`, `ASSIGNED`, and `OWN`.
 
-- [ ] **Step 3: Add matching-permission tests across all scope types**
+Use `scope_config={"organization_ids": []}` for `RELATED`, otherwise `None`. Grant the matching view permission. Each reference endpoint must return `200`.
 
-For each matching permission test all of:
+- [ ] **Step 4: Prove superuser gets 200 without role grants**
 
-```python
-ScopeType.ALL
-ScopeType.RELATED
-ScopeType.ASSIGNED
-ScopeType.OWN
-```
+Create a superuser and assert every reference endpoint returns `200`.
 
-For `RELATED`, use `scope_config={"organization_ids": []}`. For the other scope types use `scope_config=None`.
-
-Expected for all four: `200` because reference resources are global and `require_permission()` only requires the matching permission to exist.
-
-- [ ] **Step 4: Add superuser reference test**
-
-Use `_create_user(..., is_superuser=True)`, no grants, authenticate, assert `200` for every reference endpoint.
-
-- [ ] **Step 5: Run the reference subset**
+- [ ] **Step 5: Run subset**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22f_authorization_matrix.py -q -k reference
 ```
 
-Expected on correct baseline: all PASS, zero skipped.
-
-- [ ] **Step 6: Production-edit decision gate**
-
-If reference tests are GREEN, do not touch production code.
-
-If a test is RED, inspect `app/modules/opo/reference_routes.py`. The only permitted production correction is restoring the documented mapping:
-
-```python
-require_permission("opo.view")
-require_permission("technical_devices.view")
-require_permission("buildings.view")
-```
-
-Do not replace reference routes with `require_scoped_permission()`; reference data intentionally remains global.
+If GREEN, production code stays untouched. If RED proves reference permission mapping is wrong, only restore the existing permission-only mapping in `reference_routes.py`; never replace it with `require_scoped_permission()`.
 
 ---
 
-### Task 3: Prove requested-permission scope isolation for VIEW actions
+### Task 3: Prove VIEW scope cannot borrow unrelated ALL grants
 
 **Files:**
 - Test: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
 
-**Interfaces:**
-- Organizations list/detail use `organizations.view`.
-- OPO list/detail use `opo.view`.
-- Technical Devices list/detail use `technical_devices.view`.
-- Buildings list/detail use `buildings.view`.
-
-- [ ] **Step 1: Add Organizations VIEW borrowing test**
+- [ ] **Step 1: Organizations**
 
 Arrange:
 
@@ -412,35 +350,33 @@ Role B: organizations.update + ALL
 Assert:
 
 ```text
-GET /api/organizations -> 200, contains allowed_org only, excludes foreign_org
+GET /api/organizations -> 200; allowed_org present; foreign_org absent
 GET /api/organizations/{foreign_org.id} -> 404
 ```
 
-The unrelated `organizations.update + ALL` role must not widen `organizations.view`.
+- [ ] **Step 2: OPO**
 
-- [ ] **Step 2: Add OPO VIEW borrowing test**
-
-Arrange an allowed OPO related to `allowed_org` and a foreign OPO related only to `foreign_org`:
+Arrange:
 
 ```text
 Role A: opo.view + RELATED(allowed_org)
 Role B: opo.edit + ALL
 ```
 
-Assert list excludes the foreign OPO and foreign detail returns `404`.
+Create one OPO owned/operated by allowed orgs and one whose owner/operator are both foreign. Assert list excludes foreign and `GET /api/opo/{foreign_opo.id}` returns `404`.
 
-- [ ] **Step 3: Add Technical Device VIEW borrowing test**
+- [ ] **Step 3: Technical Device**
 
-Arrange allowed/foreign devices with distinct `organization_id` values:
+Arrange:
 
 ```text
 Role A: technical_devices.view + RELATED(allowed_org)
 Role B: technical_devices.edit + ALL
 ```
 
-Assert list/detail scope only follows `technical_devices.organization_id`.
+Assert list excludes foreign device and `GET /api/technical-devices/{foreign_device.id}` returns `404`. Scope follows `organization_id`, not linked OPO.
 
-- [ ] **Step 4: Add Building VIEW borrowing test**
+- [ ] **Step 4: Building**
 
 Arrange:
 
@@ -449,32 +385,24 @@ Role A: buildings.view + RELATED(allowed_org)
 Role B: buildings.edit + ALL
 ```
 
-Assert list/detail scope only follows `buildings.organization_id`.
+Assert list excludes foreign building and `GET /api/buildings/{foreign_building.id}` returns `404`.
 
-- [ ] **Step 5: Run VIEW isolation subset**
+- [ ] **Step 5: Run subset**
 
-Name these tests with `scope_isolation_view` and run:
+Name these tests `test_scope_isolation_view_*` and run:
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22f_authorization_matrix.py -q -k scope_isolation_view
 ```
 
-Expected: PASS, zero skipped.
-
 ---
 
-### Task 4: Prove requested-permission scope isolation for EDIT actions
+### Task 4: Prove EDIT scope cannot borrow broader VIEW grants
 
 **Files:**
 - Test: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
 
-**Interfaces:**
-- Organizations mutation -> `organizations.update`.
-- OPO mutation -> `opo.edit`.
-- Technical Device mutation -> `technical_devices.edit`.
-- Building mutation -> `buildings.edit`.
-
-- [ ] **Step 1: Add Organizations EDIT borrowing test**
+- [ ] **Step 1: Organizations**
 
 Arrange:
 
@@ -483,110 +411,134 @@ Role A: organizations.update + RELATED(allowed_org)
 Role B: organizations.view + ALL
 ```
 
-PATCH the foreign organization using the real existing update endpoint/payload pattern from Stage 2 integration tests. Assert `404`, refresh the row, and assert the original field value is unchanged.
+Execute exactly:
 
-- [ ] **Step 2: Add OPO EDIT borrowing test**
-
-Arrange:
-
-```text
-Role A: opo.edit + RELATED(allowed_org)
-Role B: opo.view + ALL
+```python
+response = client.patch(
+    f"/api/organizations/{foreign_org.id}",
+    json={"legal_name": "Mutated Foreign Organization"},
+    headers=_auth(token),
+)
+assert response.status_code == 404
+db_session.refresh(foreign_org)
+assert foreign_org.legal_name == original_name
 ```
 
-PATCH the foreign OPO name. Assert `404`; refresh and prove no mutation.
+- [ ] **Step 2: OPO**
 
-- [ ] **Step 3: Add Technical Device EDIT borrowing test**
+Arrange `opo.edit + RELATED(allowed_org)` plus `opo.view + ALL`, then execute:
 
-Arrange:
-
-```text
-Role A: technical_devices.edit + RELATED(allowed_org)
-Role B: technical_devices.view + ALL
+```python
+response = client.patch(
+    f"/api/opo/{foreign_opo.id}",
+    json={"name": "Mutated Foreign OPO"},
+    headers=_auth(token),
+)
+assert response.status_code == 404
+db_session.refresh(foreign_opo)
+assert foreign_opo.name == original_name
 ```
 
-PATCH the foreign device name. Assert `404`; refresh and prove no mutation.
+- [ ] **Step 3: Technical Device**
 
-- [ ] **Step 4: Add Building EDIT borrowing test**
+Arrange `technical_devices.edit + RELATED(allowed_org)` plus `technical_devices.view + ALL`, then execute:
 
-Arrange:
-
-```text
-Role A: buildings.edit + RELATED(allowed_org)
-Role B: buildings.view + ALL
+```python
+response = client.patch(
+    f"/api/technical-devices/{foreign_device.id}",
+    json={"name": "Mutated Foreign Device"},
+    headers=_auth(token),
+)
+assert response.status_code == 404
+db_session.refresh(foreign_device)
+assert foreign_device.name == original_name
 ```
 
-PATCH the foreign building name. Assert `404`; refresh and prove no mutation.
+- [ ] **Step 4: Building**
 
-- [ ] **Step 5: Run EDIT isolation subset**
+Arrange `buildings.edit + RELATED(allowed_org)` plus `buildings.view + ALL`, then execute:
 
-Name these tests with `scope_isolation_edit` and run:
+```python
+response = client.patch(
+    f"/api/buildings/{foreign_building.id}",
+    json={"name": "Mutated Foreign Building"},
+    headers=_auth(token),
+)
+assert response.status_code == 404
+db_session.refresh(foreign_building)
+assert foreign_building.name == original_name
+```
+
+- [ ] **Step 5: Run subset**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22f_authorization_matrix.py -q -k scope_isolation_edit
 ```
 
-Expected: PASS, zero skipped.
-
-If any failure requires production changes outside `reference_routes.py`, stop and report `BLOCKED`.
+Any RED requiring production edits outside `reference_routes.py` stops this checkpoint as `BLOCKED`.
 
 ---
 
-### Task 5: Prove custom-field permission isolation from broader parent permissions
+### Task 5: Prove custom-field manage scope cannot borrow OPO view ALL
 
 **Files:**
 - Test: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
 
-**Interfaces:**
-- `GET /api/custom-fields/values/opo/{entity_id}` -> `custom_fields.manage` plus parent scope.
-- `PUT /api/custom-fields/values/opo/{entity_id}/{field_definition_id}` -> same.
-
-- [ ] **Step 1: Create allowed and foreign OPO parents plus one text field definition**
-
-Use `_organization`, `_opo`, and `_cf_definition`.
-
-- [ ] **Step 2: Grant deliberately conflicting roles**
+- [ ] **Step 1: Arrange conflicting roles**
 
 ```text
 Role A: custom_fields.manage + RELATED(allowed_org)
 Role B: opo.view + ALL
 ```
 
-- [ ] **Step 3: Prove GET cannot borrow OPO ALL scope**
+Create a foreign OPO and a text custom-field definition.
+
+- [ ] **Step 2: Prove foreign GET stays 404**
 
 ```python
 response = client.get(
     f"/api/custom-fields/values/opo/{foreign_opo.id}",
-    headers={"Authorization": f"Bearer {token}"},
+    headers=_auth(token),
 )
 assert response.status_code == 404
 ```
 
-- [ ] **Step 4: Prove PUT cannot borrow OPO ALL scope and creates no row**
+- [ ] **Step 3: Prove foreign PUT stays 404 and inserts nothing**
 
-Record `_cf_value_count(...)`, call PUT with a valid text value, assert `404`, then assert the count is unchanged.
+```python
+before = _cf_value_count(
+    db_session,
+    definition_id=definition.id,
+    entity_id=foreign_opo.id,
+)
+response = client.put(
+    f"/api/custom-fields/values/opo/{foreign_opo.id}/{definition.id}",
+    json={"value": "blocked"},
+    headers=_auth(token),
+)
+assert response.status_code == 404
+after = _cf_value_count(
+    db_session,
+    definition_id=definition.id,
+    entity_id=foreign_opo.id,
+)
+assert after == before
+```
 
-- [ ] **Step 5: Run custom-field isolation subset**
+- [ ] **Step 4: Run subset**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22f_authorization_matrix.py -q -k custom_field_scope_isolation
 ```
 
-Expected: PASS, zero skipped.
-
 ---
 
-### Task 6: Prove strict fail-closed RELATED behavior at HTTP level
+### Task 6: Prove malformed RELATED configs fail closed
 
 **Files:**
 - Test: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
 
-**Interfaces:**
-- Existing parser accepts only exactly `{"organization_ids": [valid UUID strings...]}`.
-
-- [ ] **Step 1: Parameterize malformed RELATED configs**
-
-Use exactly:
+- [ ] **Step 1: Add exact malformed cases**
 
 ```python
 MALFORMED_RELATED_CONFIGS = [
@@ -597,260 +549,218 @@ MALFORMED_RELATED_CONFIGS = [
 ]
 ```
 
-- [ ] **Step 2: Prove Organizations list fails closed without becoming 403**
+- [ ] **Step 2: Organizations list remains permitted but empty**
 
-Grant `organizations.view` only through one malformed RELATED assignment. Assert:
+For each malformed config grant `organizations.view` through `RELATED`. Assert:
 
-```text
-GET /api/organizations -> 200
-response JSON total == 0
-response JSON items == []
+```python
+response = client.get("/api/organizations", headers=_auth(token))
+assert response.status_code == 200
+assert response.json()["total"] == 0
+assert response.json()["items"] == []
 ```
 
-This is permission-present-but-no-usable-scope, not permission-missing.
+- [ ] **Step 3: Existing details return 404 using the correct requested permission**
 
-- [ ] **Step 3: Prove existing details become 404**
-
-For the same malformed requested permission pattern, cover existing:
+For separate test instances/grants cover:
 
 ```text
-Organization detail
-OPO detail
-Technical Device detail
-Building detail
-Custom-field values on an existing OPO parent
+organizations.view -> GET /api/organizations/{existing_id} -> 404
+opo.view -> GET /api/opo/{existing_id} -> 404
+technical_devices.view -> GET /api/technical-devices/{existing_id} -> 404
+buildings.view -> GET /api/buildings/{existing_id} -> 404
+custom_fields.manage -> GET /api/custom-fields/values/opo/{existing_id} -> 404
 ```
 
-Expected: `404` for each.
+The permission exists, so these are not `403` cases.
 
-Use the correct requested permission per endpoint; do not reuse an unrelated permission.
-
-- [ ] **Step 4: Run malformed RELATED subset**
+- [ ] **Step 4: Run subset**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22f_authorization_matrix.py -q -k malformed_related
 ```
 
-Expected: PASS, zero skipped.
-
 ---
 
-### Task 7: Prove ASSIGNED and OWN remain deny-by-default for domain access
+### Task 7: Prove ASSIGNED and OWN deny domain access by default
 
 **Files:**
 - Test: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
 
-**Interfaces:**
-- Current Stage 3 domain authorization implements `ALL` and `RELATED` organization semantics only.
-
-- [ ] **Step 1: Parameterize denied scope types**
+- [ ] **Step 1: Parameterize scopes**
 
 ```python
 @pytest.mark.parametrize("scope_type", [ScopeType.ASSIGNED, ScopeType.OWN])
 ```
 
-- [ ] **Step 2: For each scope type prove Organization detail 404**
+- [ ] **Step 2: For each scope use the endpoint's real requested permission**
 
-Grant `organizations.view` with the parameterized scope type and `scope_config=None`; existing organization detail must be `404`.
+Assert existing objects return `404` for:
 
-- [ ] **Step 3: Repeat with correct view permission for OPO, TD, and Building**
+```text
+organizations.view -> GET /api/organizations/{organization.id}
+opo.view -> GET /api/opo/{opo.id}
+technical_devices.view -> GET /api/technical-devices/{device.id}
+buildings.view -> GET /api/buildings/{building.id}
+```
 
-Each endpoint must receive its own requested permission and return `404` for an existing object.
+Use `scope_config=None`. Do not invent owner/assignee semantics.
 
-- [ ] **Step 4: Run deny-by-default subset**
+- [ ] **Step 3: Run subset**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22f_authorization_matrix.py -q -k deny_by_default
 ```
 
-Expected: PASS, zero skipped.
-
 ---
 
-### Task 8: Prove final unauthenticated 401 and missing-permission 403 matrix
+### Task 8: Prove representative 401 and 403 matrices
 
 **Files:**
 - Test: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
 
-**Interfaces:**
-- Representative endpoints from every Stage 3 protected resource family.
+- [ ] **Step 1: Define protected representative endpoints**
 
-- [ ] **Step 1: Define representative GET endpoint factory cases**
-
-Include:
+Create URLs at test runtime for:
 
 ```text
-/api/organizations
-/api/opo
-/api/technical-devices
-/api/buildings
-/api/custom-fields/definitions
-/api/custom-fields/values/opo/<random_uuid>
-/api/reference/hazard-signs
-/api/reference/technical-device-types
-/api/reference/building-types
+GET /api/organizations
+GET /api/opo
+GET /api/technical-devices
+GET /api/buildings
+GET /api/custom-fields/definitions
+GET /api/custom-fields/values/opo/<random_uuid>
+GET /api/reference/hazard-signs
+GET /api/reference/technical-device-types
+GET /api/reference/building-types
 ```
 
-- [ ] **Step 2: Add `test_unauthenticated_matrix_returns_401`**
+- [ ] **Step 2: Add unauthenticated matrix**
 
-Parameterize the endpoints and assert exactly `401` with no Authorization header/cookie.
+Call every endpoint without session/cookie/header and assert exactly `401`.
 
-- [ ] **Step 3: Add `test_missing_permission_matrix_returns_403`**
+- [ ] **Step 3: Add missing-permission matrix using a concrete seeded unrelated permission**
 
-Create one authenticated user with a real unrelated permission such as `tasks.view` if seeded; if that permission is not seeded in the verified fixture, use another known seeded permission that is unrelated to the endpoint under test. For every representative endpoint assert exactly `403`.
+Create one user with exactly:
 
-Do not use a user with zero role assignments if the authentication setup requires a persisted active role; the point is an authenticated principal with the wrong permission.
+```text
+tasks.view + ALL
+```
 
-- [ ] **Step 4: Run the boundary subset**
+`tasks.view` is seeded by migration `0002_stage1_identity.py` and is unrelated to every endpoint in this matrix.
+
+Authenticate and assert every endpoint above returns exactly `403`.
+
+- [ ] **Step 4: Run subset**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22f_authorization_matrix.py -q -k "unauthenticated_matrix or missing_permission_matrix"
 ```
 
-Expected: PASS, zero skipped.
-
 ---
 
-### Task 9: Prove foreign-vs-absent status non-enumeration
+### Task 9: Prove foreign-vs-absent non-enumeration
 
 **Files:**
 - Test: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
 
-**Interfaces:**
-- Scoped GET routes for Organization, OPO, TD, Building, and OPO-parent custom-field values.
+- [ ] **Step 1: Grant only RELATED access to `allowed_org`**
 
-- [ ] **Step 1: Create allowed and foreign objects**
+Use the exact requested permission for each endpoint.
 
-Grant each requested view/manage permission with `RELATED(allowed_org)`.
+- [ ] **Step 2: Compare existing foreign ID to random absent ID**
 
-- [ ] **Step 2: Compare foreign and random absent Organization IDs**
-
-Call existing-foreign and random-absent detail URLs. Assert both statuses are `404`.
-
-- [ ] **Step 3: Repeat for OPO, Technical Device, and Building**
-
-For OPO scope, ensure foreign OPO owner and operator are both outside `allowed_org`.
-
-For TD/Building, ensure `organization_id` is foreign even if an OPO relation could otherwise look related.
-
-- [ ] **Step 4: Repeat for custom-field values on OPO parent**
-
-Compare:
+Both statuses must be `404` for:
 
 ```text
-/api/custom-fields/values/opo/<foreign_existing_id>
-/api/custom-fields/values/opo/<random_absent_id>
+GET /api/organizations/{id}
+GET /api/opo/{id}
+GET /api/technical-devices/{id}
+GET /api/buildings/{id}
+GET /api/custom-fields/values/opo/{id}
 ```
 
-Both must be `404`.
+For OPO, foreign owner and operator must both be outside `allowed_org`. For TD/Building, foreign `organization_id` is authoritative even if an OPO link exists.
 
-- [ ] **Step 5: Do not over-assert response text**
+- [ ] **Step 3: Assert status only**
 
-Only status equivalence is required. Do not require identical JSON detail text unless the existing route contract already guarantees it.
+Do not require identical response text; status non-enumeration is the invariant.
 
-- [ ] **Step 6: Run non-enumeration subset**
+- [ ] **Step 4: Run subset**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22f_authorization_matrix.py -q -k non_enumeration
 ```
 
-Expected: PASS, zero skipped.
-
 ---
 
-### Task 10: Execute evidence-first RED/GREEN gate
+### Task 10: Execute the evidence-first RED/GREEN gate
 
 **Files:**
 - Test: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
 - Possible production file: `app/modules/opo/reference_routes.py`
 
-**Interfaces:**
-- Uses only behavior defined by the approved CP2.2-F design.
-
-- [ ] **Step 1: Run the complete new matrix before production edits**
+- [ ] **Step 1: Run complete new matrix before any production edit**
 
 ```powershell
 $env:TEST_DATABASE_URL = "postgresql+psycopg://spravoshnik:spravoshnik@127.0.0.1:5433/spravoshnik_test"
 python -m pytest tests/integration/test_stage3_cp22f_authorization_matrix.py -q
 ```
 
-Acceptable outcomes:
+Valid outcomes:
 
 ```text
-GREEN immediately -> expected/valid closure result; no production edit.
-RED in reference permission behavior -> diagnose and minimally fix reference_routes.py.
-RED elsewhere -> CP2.2-F BLOCKED; do not widen production scope.
+GREEN immediately -> preferred closure outcome; no production edit.
+RED only in reference permission behavior -> diagnose and minimally correct reference_routes.py.
+RED anywhere else -> BLOCKED; do not widen CP2.2-F.
 ```
 
-- [ ] **Step 2: If reference RED exists, record exact evidence before edit**
+- [ ] **Step 2: If reference RED occurs, capture evidence before editing**
 
-Report:
+Record failing test, endpoint, requested permission, actual status/body, expected status, scope type, and root cause.
 
-```text
-failing test
-actual status/body
-expected status
-requested permission
-scope type
-affected reference endpoint
-root cause in reference_routes.py
-```
+- [ ] **Step 3: Re-run matrix after any allowed reference fix**
 
-- [ ] **Step 3: Apply only the minimal reference permission fix if required**
-
-No organization filtering, no scoped dependency, no new permissions.
-
-- [ ] **Step 4: Re-run the full new matrix**
-
-Required:
-
-```text
-0 failed
-0 errors
-0 skipped
-```
+Required: `0 failed`, `0 errors`, `0 skipped`.
 
 ---
 
-### Task 11: Run Stage 3 authorization regressions
+### Task 11: Run authorization checkpoint regressions
 
 **Files:**
-- No code changes expected.
+- No production change expected.
 
-**Interfaces:**
-- CP2.2-A through E plus legacy authorization API.
-
-- [ ] **Step 1: Run CP2.2-E**
+- [ ] **Step 1: CP2.2-E**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22e_custom_fields_parent_scope.py -q
 ```
 
-- [ ] **Step 2: Run CP2.2-D**
+- [ ] **Step 2: CP2.2-D**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22d_td_building_http_scope.py -q
 ```
 
-- [ ] **Step 3: Run CP2.2-C**
+- [ ] **Step 3: CP2.2-C**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22c_org_opo_http_scope.py -q
 ```
 
-- [ ] **Step 4: Run CP2.2-B**
+- [ ] **Step 4: CP2.2-B**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22b_scoped_repositories.py -q
 ```
 
-- [ ] **Step 5: Run CP2.2-A**
+- [ ] **Step 5: CP2.2-A**
 
 ```powershell
 python -m pytest tests/integration/test_stage3_cp22a_authorization_core.py -q
 ```
 
-- [ ] **Step 6: Run legacy unit authorization tests**
+- [ ] **Step 6: Legacy authorization API**
 
 ```powershell
 python -m pytest tests/unit/test_authorization.py -q
@@ -860,23 +770,20 @@ Every integration invocation must show zero skipped tests.
 
 ---
 
-### Task 12: Run complete PostgreSQL backend verification and static gates
+### Task 12: Run full backend and static verification
 
 **Files:**
-- No additional changes expected.
+- No additional change expected.
 
-**Interfaces:**
-- Entire backend test suite and repository hygiene.
-
-- [ ] **Step 1: Verify test database containers are healthy**
+- [ ] **Step 1: PostgreSQL health**
 
 ```powershell
 docker compose ps
 ```
 
-Required: `postgres` and `postgres-test` healthy.
+Require both `postgres` and `postgres-test` healthy.
 
-- [ ] **Step 2: Ensure no parallel pytest is sharing the test DB**
+- [ ] **Step 2: Avoid concurrent pytest on the shared test DB**
 
 ```powershell
 Get-CimInstance Win32_Process |
@@ -884,26 +791,18 @@ Get-CimInstance Win32_Process |
   Select-Object ProcessId, CommandLine
 ```
 
-Stop only stale pytest processes that are known to belong to this project. Do not terminate unrelated Python processes.
+Only stop a stale pytest process when it is known to belong to this project.
 
-- [ ] **Step 3: Run the full backend suite once**
+- [ ] **Step 3: Full backend suite**
 
 ```powershell
 $env:TEST_DATABASE_URL = "postgresql+psycopg://spravoshnik:spravoshnik@127.0.0.1:5433/spravoshnik_test"
 python -m pytest -q
 ```
 
-Required:
+Baseline was 319 tests; final count must be greater because CP2.2-F adds tests. Required: `0 failed`, `0 errors`, `0 skipped`.
 
-```text
-0 failed
-0 errors
-0 skipped
-```
-
-Baseline before CP2.2-F was 319 passed; final count may be higher only because CP2.2-F adds tests.
-
-- [ ] **Step 4: Run Ruff**
+- [ ] **Step 4: Ruff**
 
 ```powershell
 ruff check tests/integration/test_stage3_cp22f_authorization_matrix.py
@@ -915,16 +814,16 @@ If `reference_routes.py` changed:
 ruff check app/modules/opo/reference_routes.py
 ```
 
-- [ ] **Step 5: Verify migrations unchanged**
+- [ ] **Step 5: Alembic invariant**
 
 ```powershell
 python -m alembic heads
 python -m alembic current
 ```
 
-Both must report `0010_stage3` with the main PostgreSQL container healthy.
+Both must report `0010_stage3`.
 
-- [ ] **Step 6: Verify Git diff hygiene**
+- [ ] **Step 6: Diff hygiene**
 
 ```powershell
 git diff --check
@@ -933,121 +832,125 @@ git diff --stat 1445d8a...HEAD
 git diff 1445d8a...HEAD -- . ":(exclude)docs/superpowers/specs/**" ":(exclude)docs/superpowers/plans/**"
 ```
 
-Expected implementation diff:
+Expected implementation diff: the new test file only, plus `reference_routes.py` only if a proven reference RED required it. No frontend or migration diff.
+
+- [ ] **Step 7: GitHub Actions evidence**
+
+The push-triggered CI must show PASS for:
 
 ```text
-tests/integration/test_stage3_cp22f_authorization_matrix.py
+ruff check app tests
+alembic upgrade head
+pytest
 ```
 
-plus `app/modules/opo/reference_routes.py` only if a proven reference RED required it.
-
-There must be no frontend or Alembic diff.
+If CI fails, inspect the exact job/log before any production change.
 
 ---
 
-### Task 13: Commit implementation boundary and hand off for independent local audit
+### Task 13: Commit and hand off the exact implementation SHA
 
 **Files:**
 - Add: `tests/integration/test_stage3_cp22f_authorization_matrix.py`
 - Add only if proven: `app/modules/opo/reference_routes.py`
 
-**Interfaces:**
-- Produces the exact GitHub commit to be fetched and independently verified locally.
-
-- [ ] **Step 1: Commit test-only closure when production code remains correct**
+- [ ] **Step 1: Test-only closure commit**
 
 ```powershell
 git add tests/integration/test_stage3_cp22f_authorization_matrix.py
 git commit -m "test(stage3 cp2.2-f): close authorization regression matrix"
 ```
 
-- [ ] **Step 2: Alternative commit message only if a proven reference bug was fixed**
+- [ ] **Step 2: Alternative only if reference production fix was proven**
 
 ```powershell
 git add app/modules/opo/reference_routes.py tests/integration/test_stage3_cp22f_authorization_matrix.py
 git commit -m "fix(stage3 cp2.2-f): close authorization boundaries"
 ```
 
-- [ ] **Step 3: Push only the checkpoint branch**
+- [ ] **Step 3: Push only checkpoint branch**
 
 ```powershell
 git push origin agent/stage3-cp22f-authorization-closure
 ```
 
-Never push implementation changes to `main` or directly to the baseline integration branch.
-
-- [ ] **Step 4: User fetches exact implementation commit**
+- [ ] **Step 4: User fetches exact SHA**
 
 ```powershell
 cd D:\Spravoshnik-EPB
 git fetch origin --prune
 git switch --track origin/agent/stage3-cp22f-authorization-closure
-# if local branch already exists: git switch agent/stage3-cp22f-authorization-closure; git pull --ff-only
+# if it already exists locally:
+# git switch agent/stage3-cp22f-authorization-closure
+# git pull --ff-only
 git rev-parse --short HEAD
 git status -sb
 ```
 
-The SHA must match the handoff report before agents begin verification.
+The local SHA must match the GitHub handoff SHA.
 
-- [ ] **Step 5: Verification Agent returns a structured report without production edits**
+- [ ] **Step 5: Verification Agent report**
 
-Required report sections:
+Required sections:
 
 ```text
 Branch / HEAD
-TEST_DATABASE_URL present
+TEST_DATABASE_URL set
 Docker health
-CP2.2-F targeted result
-CP2.2-E/D/C/B/A results
-legacy authorization unit result
-full pytest result
-Ruff result
+CP2.2-F targeted
+CP2.2-E/D/C/B/A regressions
+legacy authorization unit
+full pytest
+Ruff
 Alembic heads/current
 git diff --check
 blocking findings
 verdict PASS/FAIL
 ```
 
-- [ ] **Step 6: Security Auditor reviews behavior independently**
+The verifier does not silently edit production code.
 
-Audit at minimum:
+- [ ] **Step 6: Security Auditor report**
+
+Audit:
 
 ```text
-401 before permission/scope evaluation
+401 before permission/scope
 403 for missing requested permission
-404 foreign-vs-absent non-enumeration
-cross-role permission scope borrowing
+404 foreign vs absent
+cross-role scope borrowing
 malformed RELATED fail-closed
 ASSIGNED/OWN deny-by-default
 global reference permission-only boundary
-custom-field parent-scope isolation
+custom-field parent scope
 no schema/frontend/unrelated production changes
 ```
 
-The auditor reports findings only; it does not silently repair production code.
+The auditor reports findings only.
 
 ---
 
 ## Completion Gate
 
-CP2.2-F may be reported `COMPLETE` only after all of these are evidenced on the exact implementation SHA:
+CP2.2-F is `COMPLETE` only with evidence on the exact implementation SHA:
 
 ```text
-CP2.2-F matrix:              PASS, 0 skipped
-CP2.2-E regression:          PASS, 0 skipped
-CP2.2-D regression:          PASS, 0 skipped
-CP2.2-C regression:          PASS, 0 skipped
-CP2.2-B regression:          PASS, 0 skipped
-CP2.2-A regression:          PASS, 0 skipped
-legacy authorization unit:   PASS
-full PostgreSQL pytest:       PASS, 0 failed/errors/skipped
-Ruff:                         PASS
-Alembic heads/current:        0010_stage3
-frontend diff:                none
-migration diff:               none
-unrelated production diff:   none
-Verification Agent:           PASS
-Security Auditor:             no blocking finding
+CP2.2-F matrix              PASS, 0 skipped
+CP2.2-E                     PASS, 0 skipped
+CP2.2-D                     PASS, 0 skipped
+CP2.2-C                     PASS, 0 skipped
+CP2.2-B                     PASS, 0 skipped
+CP2.2-A                     PASS, 0 skipped
+legacy authorization unit   PASS
+full PostgreSQL pytest       PASS, 0 failed/errors/skipped
+Ruff                         PASS
+GitHub Actions               PASS
+Alembic heads/current        0010_stage3
+frontend diff                none
+migration diff               none
+unrelated production diff    none
+Verification Agent           PASS
+Security Auditor             no blocking finding
 ```
 
-At that point CP2.2-F closes Stage 3 authorization and establishes the security baseline for the next product checkpoint.
+When this gate is satisfied, CP2.2-F closes Stage 3 authorization and becomes the verified security baseline for subsequent product checkpoints.
