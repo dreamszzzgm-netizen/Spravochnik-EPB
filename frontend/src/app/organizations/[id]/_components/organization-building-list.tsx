@@ -1,18 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Warehouse } from "lucide-react";
+import { Plus, Loader2, Warehouse } from "lucide-react";
+import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApiError } from "@/lib/api/errors";
 import { getBuildings } from "@/lib/api/resources";
 import type { BuildingResponse } from "@/lib/api/types";
+import { buildingTypeLabel } from "@/lib/api/view-models";
+import { useCan } from "@/lib/auth";
 
 export function OrganizationBuildingList({ organizationId }: { organizationId: string }) {
   const [items, setItems] = useState<BuildingResponse[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const canCreate = useCan("buildings.create");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -60,7 +65,17 @@ export function OrganizationBuildingList({ organizationId }: { organizationId: s
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Здания и сооружения</CardTitle>
-        <span className="text-sm text-muted-foreground">{total}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">{total}</span>
+          {canCreate && (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/organizations/${organizationId}/buildings/new`}>
+                <Plus className="mr-1 h-4 w-4" />
+                Добавить
+              </Link>
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
@@ -77,7 +92,7 @@ export function OrganizationBuildingList({ organizationId }: { organizationId: s
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{building.name}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {building.building_type}
+                    {buildingTypeLabel(building.building_type)}
                   </p>
                 </div>
                 <span className="text-xs text-muted-foreground">

@@ -1,10 +1,14 @@
 import { apiRequest } from "./client";
 import type {
+  BuildingCreatePayload,
   BuildingPaginatedResponse,
+  BuildingResponse,
   CurrentUserResponse,
   HealthResponse,
   LoginResponse,
+  OPOCreatePayload,
   OPOPaginatedResponse,
+  OPOResponse,
   OrganizationContactCreatePayload,
   OrganizationContactResponse,
   OrganizationCreatePayload,
@@ -12,7 +16,10 @@ import type {
   OrganizationPaginatedResponse,
   OrganizationResponse,
   OrganizationUpdatePayload,
+  ReferenceItemResponse,
+  TechnicalDeviceCreatePayload,
   TechnicalDevicePaginatedResponse,
+  TechnicalDeviceResponse,
 } from "./types";
 
 type ResourceOptions = { signal?: AbortSignal };
@@ -126,3 +133,27 @@ export const getBuildings = (
     signal: params.signal,
   });
 };
+
+export const createOpo = (payload: OPOCreatePayload) =>
+  apiRequest<OPOResponse>("/api/opo", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const createTechnicalDevice = (payload: TechnicalDeviceCreatePayload) =>
+  apiRequest<TechnicalDeviceResponse>("/api/technical-devices", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const createBuilding = (payload: BuildingCreatePayload) =>
+  apiRequest<BuildingResponse>("/api/buildings", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const getHazardSigns = (options: ResourceOptions = {}) =>
+  apiRequest<ReferenceItemResponse[]>("/api/reference/hazard-signs", options);
+
+export const getActivityTypes = (options: ResourceOptions = {}) =>
+  apiRequest<ReferenceItemResponse[]>("/api/reference/activity-types", options);
