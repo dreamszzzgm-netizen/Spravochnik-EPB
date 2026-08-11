@@ -1,6 +1,5 @@
 import sqlalchemy as sa
 
-
 EXPECTED_STAGE4_TABLES = {
     "contracts",
     "contract_responsibles",
