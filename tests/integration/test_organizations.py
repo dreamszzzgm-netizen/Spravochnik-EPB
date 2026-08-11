@@ -11,7 +11,6 @@ from app.modules.organizations.models import (
     ContactType,
     IdentifierType,
     Organization,
-    OrganizationContact,
     OrganizationIdentifier,
     OrganizationType,
 )
