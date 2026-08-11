@@ -1,8 +1,9 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import false, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.modules.identity.authorization import AuthorizationContext
 from app.modules.opo.models import (
     OPO,
     ActivityType,
@@ -27,18 +28,42 @@ def list_opo_paginated(
     page_size: int = 20,
     organization_id: uuid.UUID | None = None,
     include_deleted: bool = False,
+    authorization: AuthorizationContext | None = None,
 ) -> tuple[list[OPO], int]:
-    from sqlalchemy import or_
-
     stmt = select(OPO)
+
     if not include_deleted:
-        stmt = stmt.where(OPO.deleted_at.is_(None))
+        stmt = stmt.where(
+            OPO.deleted_at.is_(None)
+        )
+
+    if (
+        authorization is not None
+        and not authorization.has_all_scope
+    ):
+        allowed_ids = authorization.related_organization_ids
+
+        if allowed_ids:
+            stmt = stmt.where(
+                or_(
+                    OPO.owner_organization_id.in_(
+                        allowed_ids
+                    ),
+                    OPO.operating_organization_id.in_(
+                        allowed_ids
+                    ),
+                )
+            )
+        else:
+            stmt = stmt.where(false())
 
     if organization_id is not None:
         stmt = stmt.where(
             or_(
-                OPO.owner_organization_id == organization_id,
-                OPO.operating_organization_id == organization_id,
+                OPO.owner_organization_id
+                == organization_id,
+                OPO.operating_organization_id
+                == organization_id,
             )
         )
 
@@ -47,20 +72,32 @@ def list_opo_paginated(
         stmt = stmt.where(
             or_(
                 OPO.name.ilike(pattern),
-                OPO.registration_number.ilike(pattern),
+                OPO.registration_number.ilike(
+                    pattern
+                ),
                 OPO.address.ilike(pattern),
             )
         )
 
-    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    total = db.scalar(
+        select(func.count()).select_from(
+            stmt.subquery()
+        )
+    )
+
     offset = max(0, page - 1) * page_size
+
     items = list(
         db.scalars(
-            stmt.order_by(OPO.name.asc(), OPO.id.asc())
+            stmt.order_by(
+                OPO.name.asc(),
+                OPO.id.asc(),
+            )
             .offset(offset)
             .limit(min(page_size, 100))
         )
     )
+
     return items, total or 0
 
 

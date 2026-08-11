@@ -1,8 +1,9 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import false, func, select
 from sqlalchemy.orm import Session
 
+from app.modules.identity.authorization import AuthorizationContext
 from app.modules.technical_devices.models import TechnicalDevice
 
 
@@ -23,33 +24,68 @@ def list_technical_devices_paginated(
     page_size: int = 20,
     organization_id: uuid.UUID | None = None,
     opo_id: uuid.UUID | None = None,
+    authorization: AuthorizationContext | None = None,
 ) -> tuple[list[TechnicalDevice], int]:
     from sqlalchemy import or_
 
-    stmt = select(TechnicalDevice).where(TechnicalDevice.deleted_at.is_(None))
+    stmt = select(TechnicalDevice).where(
+        TechnicalDevice.deleted_at.is_(None)
+    )
+
+    if (
+        authorization is not None
+        and not authorization.has_all_scope
+    ):
+        allowed_ids = authorization.related_organization_ids
+
+        if allowed_ids:
+            stmt = stmt.where(
+                TechnicalDevice.organization_id.in_(
+                    allowed_ids
+                )
+            )
+        else:
+            stmt = stmt.where(false())
 
     if organization_id:
-        stmt = stmt.where(TechnicalDevice.organization_id == organization_id)
+        stmt = stmt.where(
+            TechnicalDevice.organization_id
+            == organization_id
+        )
 
     if opo_id is not None:
-        stmt = stmt.where(TechnicalDevice.opo_id == opo_id)
+        stmt = stmt.where(
+            TechnicalDevice.opo_id == opo_id
+        )
 
     if q:
         pattern = f"%{q}%"
         stmt = stmt.where(
             or_(
                 TechnicalDevice.name.ilike(pattern),
-                TechnicalDevice.serial_number.ilike(pattern),
+                TechnicalDevice.serial_number.ilike(
+                    pattern
+                ),
             )
         )
 
-    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    total = db.scalar(
+        select(func.count()).select_from(
+            stmt.subquery()
+        )
+    )
+
     offset = max(0, page - 1) * page_size
+
     items = list(
         db.scalars(
-            stmt.order_by(TechnicalDevice.name.asc(), TechnicalDevice.id.asc())
+            stmt.order_by(
+                TechnicalDevice.name.asc(),
+                TechnicalDevice.id.asc(),
+            )
             .offset(offset)
             .limit(min(page_size, 100))
         )
     )
+
     return items, total or 0

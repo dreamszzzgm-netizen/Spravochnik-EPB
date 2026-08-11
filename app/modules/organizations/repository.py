@@ -1,8 +1,9 @@
 import uuid
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, false, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.modules.identity.authorization import AuthorizationContext
 from app.modules.organizations.models import (
     Organization,
     OrganizationContact,
@@ -30,7 +31,12 @@ def list_organizations(
     return list(db.scalars(stmt))
 
 
-def list_contacts(db: Session, organization_id: uuid.UUID, *, include_deleted: bool = False) -> list[OrganizationContact]:
+def list_contacts(
+    db: Session,
+    organization_id: uuid.UUID,
+    *,
+    include_deleted: bool = False,
+) -> list[OrganizationContact]:
     stmt = (
         select(OrganizationContact)
         .where(OrganizationContact.organization_id == organization_id)
@@ -67,8 +73,22 @@ def list_organizations_paginated(
     q: str = "",
     page: int = 1,
     page_size: int = 20,
+    authorization: AuthorizationContext | None = None,
 ) -> tuple[list[Organization], int]:
     stmt = select(Organization).where(Organization.deleted_at.is_(None))
+
+    if (
+        authorization is not None
+        and not authorization.has_all_scope
+    ):
+        allowed_ids = authorization.related_organization_ids
+
+        stmt = (
+            stmt.where(Organization.id.in_(allowed_ids))
+            if allowed_ids
+            else stmt.where(false())
+        )
+
     if q:
         pattern = f"%{q}%"
         stmt = stmt.where(
@@ -77,13 +97,23 @@ def list_organizations_paginated(
                 Organization.short_name.ilike(pattern),
             )
         )
-    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+
+    total = db.scalar(
+        select(func.count()).select_from(
+            stmt.subquery()
+        )
+    )
+
     offset = max(0, page - 1) * page_size
+
     items = list(
         db.scalars(
-            stmt.order_by(Organization.legal_name.asc())
+            stmt.order_by(
+                Organization.legal_name.asc()
+            )
             .offset(offset)
             .limit(page_size)
         )
     )
+
     return items, total or 0
