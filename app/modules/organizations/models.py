@@ -69,7 +69,12 @@ class OrganizationContact(Base):
         index=True,
     )
     contact_type: Mapped[ContactType] = mapped_column(
-        Enum(ContactType, name="contact_type", values_callable=enum_values, create_constraint=False),
+        Enum(
+            ContactType,
+            name="contact_type",
+            values_callable=enum_values,
+            create_constraint=False,
+        ),
         nullable=False,
         default=ContactType.OTHER,
     )
