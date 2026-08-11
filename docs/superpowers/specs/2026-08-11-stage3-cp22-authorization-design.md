@@ -27,12 +27,13 @@ HTTP behavior is fixed as follows:
 
 - unauthenticated / invalid / expired session -> 401
 - authenticated but missing required permission -> 403
+- authenticated with permission, but the operation itself is not allowed by the caller's scope and there is no foreign object identifier to conceal (for example RELATED creating a new Organization) -> 403
 - object exists but is outside the caller's authorized scope -> 404
 - object does not exist -> 404
 - deleted object through normal endpoint -> 404
 - deleted object through restore endpoint but outside scope -> 404
 
-This deliberately makes foreign-object UUIDs indistinguishable from nonexistent UUIDs.
+This deliberately makes foreign-object UUIDs indistinguishable from nonexistent UUIDs while preserving 403 for scope-level operation denial where no object existence is disclosed.
 
 ## Scope model
 
@@ -210,7 +211,7 @@ DETAIL / UPDATE / DELETE / RESTORE:
 CREATE:
 
 - ALL only
-- RELATED / ASSIGNED / OWN -> denied
+- RELATED / ASSIGNED / OWN -> 403
 
 Creation requires ALL because creating a new organization would otherwise let a scoped user create data outside the administrator-controlled organization set.
 
@@ -230,6 +231,7 @@ CREATE:
 - ALL -> normal domain validation
 - RELATED -> both owner and operator organizations must be in scope
 - any foreign organization reference -> 404
+- ASSIGNED/OWN-only -> references are outside the effective Stage 3 scope and therefore resolve as inaccessible (404)
 
 UPDATE:
 
@@ -252,6 +254,7 @@ CREATE:
 
 - organization_id must be in scope for RELATED
 - if opo_id is supplied, that OPO must also be in scope
+- foreign/inaccessible organization or OPO reference -> 404
 - existing domain invariant remains: row organization must match OPO owner OR operator
 
 UPDATE:
@@ -361,6 +364,7 @@ Required negative and positive coverage:
 - no session -> 401
 - invalid/expired session -> 401
 - authenticated without required permission -> 403
+- RELATED/ASSIGNED/OWN creating Organization -> 403
 
 ### ALL
 
