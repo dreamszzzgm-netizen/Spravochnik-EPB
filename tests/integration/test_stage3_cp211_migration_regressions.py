@@ -12,6 +12,7 @@ from alembic import command
 pytestmark = pytest.mark.integration
 
 STAGE3_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+CURRENT_HEAD = "0011_stage4_contracts_core"
 
 
 def _config() -> Config:
@@ -222,7 +223,7 @@ def test_0010_ambiguous_backfill_leaves_null(
     engine = _engine()
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "0010_stage3"
+        assert version == CURRENT_HEAD
         assert _column_exists(conn, "technical_devices", "organization_id")
         assert _column_exists(conn, "buildings", "organization_id")
         assert _column_exists(conn, "opo", "comment")
@@ -267,7 +268,7 @@ def test_0010_standalone_backfill_leaves_null(
     engine = _engine()
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "0010_stage3"
+        assert version == CURRENT_HEAD
         assert _column_exists(conn, "technical_devices", "organization_id")
         assert _column_exists(conn, "buildings", "organization_id")
         assert _column_exists(conn, "opo", "comment")
@@ -300,7 +301,7 @@ def test_real_downgrade_0010_to_revised_0009_preserves_cascade_state() -> None:
     engine = _engine()
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-        assert version == "0010_stage3"
+        assert version == CURRENT_HEAD
         assert _column_exists(conn, "technical_devices", "organization_id")
         assert _column_exists(conn, "buildings", "organization_id")
         assert _column_exists(conn, "opo", "comment")
