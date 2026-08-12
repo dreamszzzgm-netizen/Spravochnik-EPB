@@ -49,10 +49,24 @@ class TaskStatusChange(BaseModel):
     status: TaskStatus
 
 
+class TaskCommentCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+
+
 class TaskLinkResponse(BaseModel):
     kind: TaskLinkKind
     entity_id: uuid.UUID
     is_primary: bool
+
+
+class TaskCommentResponse(BaseModel):
+    id: uuid.UUID
+    author_employee_id: uuid.UUID
+    text: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class TaskResponse(BaseModel):
