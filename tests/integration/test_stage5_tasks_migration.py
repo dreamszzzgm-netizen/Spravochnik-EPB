@@ -6,10 +6,6 @@ import subprocess
 import pytest
 from sqlalchemy import create_engine, inspect, text
 
-from app.modules.comments.models import Comment, CommentTask
-from app.modules.tasks.enums import TaskPriority, TaskStatus
-from app.modules.tasks.models import Task
-
 pytestmark = pytest.mark.integration
 
 CURRENT_HEAD = "0013_stage5_tasks_core"
@@ -46,6 +42,8 @@ def _run_alembic(*args: str) -> None:
 
 
 def test_task_enums_are_exact() -> None:
+    from app.modules.tasks.enums import TaskPriority, TaskStatus
+
     assert [item.value for item in TaskStatus] == [
         "new",
         "in_progress",
@@ -61,6 +59,9 @@ def test_task_enums_are_exact() -> None:
 
 
 def test_task_models_use_expected_tables() -> None:
+    from app.modules.comments.models import Comment, CommentTask
+    from app.modules.tasks.models import Task
+
     assert Task.__tablename__ == "tasks"
     assert Comment.__tablename__ == "comments"
     assert CommentTask.__tablename__ == "comment_tasks"
