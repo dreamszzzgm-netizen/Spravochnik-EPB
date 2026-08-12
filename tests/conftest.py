@@ -61,6 +61,22 @@ def _ensure_migrations():
     command.upgrade(alembic_cfg, "head")
 
 
+@pytest.fixture(autouse=True)
+def _restore_migration_head_after_test(request: pytest.FixtureRequest):
+    """Migration tests must never leave the shared integration DB below head."""
+    yield
+    if not os.getenv("TEST_DATABASE_URL") or "migration" not in request.node.name.lower():
+        return
+
+    from alembic.config import Config
+
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+    alembic_cfg.set_main_option("sqlalchemy.url", os.environ["TEST_DATABASE_URL"])
+    command.upgrade(alembic_cfg, "head")
+
+
 @pytest.fixture()
 def db_session() -> Generator[Session, None, None]:
     """Session SQLAlchemy, управляющая транзакцией в тестовой БД."""

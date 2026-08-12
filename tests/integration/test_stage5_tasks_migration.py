@@ -119,8 +119,11 @@ def test_stage5_migration_round_trip() -> None:
     database_url = _database_url()
     assert _current_revision(database_url) == CURRENT_HEAD
 
-    _run_alembic("downgrade", PARENT_HEAD)
-    assert _current_revision(database_url) == PARENT_HEAD
+    try:
+        _run_alembic("downgrade", PARENT_HEAD)
+        assert _current_revision(database_url) == PARENT_HEAD
 
-    _run_alembic("upgrade", CURRENT_HEAD)
-    assert _current_revision(database_url) == CURRENT_HEAD
+        _run_alembic("upgrade", CURRENT_HEAD)
+        assert _current_revision(database_url) == CURRENT_HEAD
+    finally:
+        _run_alembic("upgrade", "head")
