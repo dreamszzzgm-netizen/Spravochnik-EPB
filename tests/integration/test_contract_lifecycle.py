@@ -99,6 +99,36 @@ def _audit_count(db: Session, action: str) -> int:
     )
 
 
+def _prepare_signable_contract(
+    db: Session,
+    test_user: dict[str, object],
+    organization: Organization,
+    *,
+    number: str,
+):
+    contract = ContractService().create_contract(
+        db,
+        actor_id=_actor_id(test_user),
+        customer_organization_id=organization.id,
+        customer_contact_id=None,
+        number=number,
+        contract_date=date(2026, 8, 11),
+        start_date=date(2026, 8, 12),
+        end_date=date(2026, 9, 30),
+        comment=None,
+    )
+    device = _device(db, organization)
+    _item(db, test_user, contract, device)
+    employee = _employee(db, f"Ответственный {number}")
+    ContractService().replace_responsibles(
+        db,
+        actor_id=_actor_id(test_user),
+        contract=contract,
+        employee_ids=[employee.id],
+    )
+    return contract
+
+
 def test_signed_contract_rejects_item_create_update_delete(
     db_session: Session,
     test_user: dict[str, object],
@@ -355,3 +385,324 @@ def test_contract_count_helpers(
 
     assert count_active_contract_items(db_session, contract.id) == 1
     assert count_contract_responsibles(db_session, contract.id) == 1
+
+
+def test_ordinary_transition_matrix_accepts_only_approved_pairs(
+    db_session: Session,
+    test_user: dict[str, object],
+) -> None:
+    from app.modules.contracts.lifecycle import ContractLifecycleService
+
+    customer = _organization(db_session)
+    lifecycle = ContractLifecycleService()
+    actor_id = _actor_id(test_user)
+
+    allowed_cases = [
+        (ContractStatus.DRAFT, ContractStatus.APPROVAL),
+        (ContractStatus.APPROVAL, ContractStatus.SIGNED),
+        (ContractStatus.COMPLETED, ContractStatus.ARCHIVED),
+        (ContractStatus.TERMINATED, ContractStatus.ARCHIVED),
+    ]
+    for index, (source, target) in enumerate(allowed_cases, start=1):
+        contract = _prepare_signable_contract(
+            db_session,
+            test_user,
+            customer,
+            number=f"ALLOWED-{index}",
+        )
+        contract.status = source
+        db_session.commit()
+        result = lifecycle.change_status(
+            db_session,
+            actor_id=actor_id,
+            contract=contract,
+            target_status=target,
+        )
+        assert result.status == target
+
+    rejected_cases = [
+        (ContractStatus.DRAFT, ContractStatus.SIGNED),
+        (ContractStatus.APPROVAL, ContractStatus.IN_PROGRESS),
+        (ContractStatus.SIGNED, ContractStatus.IN_PROGRESS),
+        (ContractStatus.ARCHIVED, ContractStatus.DRAFT),
+    ]
+    for index, (source, target) in enumerate(rejected_cases, start=1):
+        contract = _prepare_signable_contract(
+            db_session,
+            test_user,
+            customer,
+            number=f"REJECTED-{index}",
+        )
+        contract.status = source
+        db_session.commit()
+        before_version = contract.version
+        before_audit = _audit_count(db_session, "contract.status_changed")
+        with pytest.raises(ContractValidationError):
+            lifecycle.change_status(
+                db_session,
+                actor_id=actor_id,
+                contract=contract,
+                target_status=target,
+            )
+        db_session.refresh(contract)
+        assert contract.status == source
+        assert contract.version == before_version
+        assert _audit_count(db_session, "contract.status_changed") == before_audit
+
+
+def test_signing_requires_start_date(
+    db_session: Session,
+    test_user: dict[str, object],
+) -> None:
+    from app.modules.contracts.lifecycle import ContractLifecycleService
+
+    customer = _organization(db_session)
+    contract = _prepare_signable_contract(
+        db_session, test_user, customer, number="NO-START"
+    )
+    contract.status = ContractStatus.APPROVAL
+    contract.start_date = None
+    db_session.commit()
+    before_version = contract.version
+    before_audit = _audit_count(db_session, "contract.status_changed")
+
+    with pytest.raises(ContractValidationError):
+        ContractLifecycleService().change_status(
+            db_session,
+            actor_id=_actor_id(test_user),
+            contract=contract,
+            target_status=ContractStatus.SIGNED,
+        )
+
+    db_session.refresh(contract)
+    assert contract.status == ContractStatus.APPROVAL
+    assert contract.version == before_version
+    assert contract.original_end_date is None
+    assert _audit_count(db_session, "contract.status_changed") == before_audit
+
+
+def test_signing_requires_end_date(
+    db_session: Session,
+    test_user: dict[str, object],
+) -> None:
+    from app.modules.contracts.lifecycle import ContractLifecycleService
+
+    customer = _organization(db_session)
+    contract = _prepare_signable_contract(
+        db_session, test_user, customer, number="NO-END"
+    )
+    contract.status = ContractStatus.APPROVAL
+    contract.end_date = None
+    db_session.commit()
+    before_version = contract.version
+    before_audit = _audit_count(db_session, "contract.status_changed")
+
+    with pytest.raises(ContractValidationError):
+        ContractLifecycleService().change_status(
+            db_session,
+            actor_id=_actor_id(test_user),
+            contract=contract,
+            target_status=ContractStatus.SIGNED,
+        )
+
+    db_session.refresh(contract)
+    assert contract.status == ContractStatus.APPROVAL
+    assert contract.version == before_version
+    assert contract.original_end_date is None
+    assert _audit_count(db_session, "contract.status_changed") == before_audit
+
+
+def test_signing_requires_active_item(
+    db_session: Session,
+    test_user: dict[str, object],
+) -> None:
+    from app.modules.contracts.lifecycle import ContractLifecycleService
+
+    customer = _organization(db_session)
+    contract = _contract(db_session, test_user, customer)
+    employee = _employee(db_session)
+    ContractService().replace_responsibles(
+        db_session,
+        actor_id=_actor_id(test_user),
+        contract=contract,
+        employee_ids=[employee.id],
+    )
+    contract.status = ContractStatus.APPROVAL
+    db_session.commit()
+    before_version = contract.version
+    before_audit = _audit_count(db_session, "contract.status_changed")
+
+    with pytest.raises(ContractValidationError):
+        ContractLifecycleService().change_status(
+            db_session,
+            actor_id=_actor_id(test_user),
+            contract=contract,
+            target_status=ContractStatus.SIGNED,
+        )
+
+    db_session.refresh(contract)
+    assert contract.status == ContractStatus.APPROVAL
+    assert contract.version == before_version
+    assert _audit_count(db_session, "contract.status_changed") == before_audit
+
+
+def test_signing_requires_responsible(
+    db_session: Session,
+    test_user: dict[str, object],
+) -> None:
+    from app.modules.contracts.lifecycle import ContractLifecycleService
+
+    customer = _organization(db_session)
+    contract = _contract(db_session, test_user, customer)
+    device = _device(db_session, customer)
+    _item(db_session, test_user, contract, device)
+    contract.status = ContractStatus.APPROVAL
+    db_session.commit()
+    before_version = contract.version
+    before_audit = _audit_count(db_session, "contract.status_changed")
+
+    with pytest.raises(ContractValidationError):
+        ContractLifecycleService().change_status(
+            db_session,
+            actor_id=_actor_id(test_user),
+            contract=contract,
+            target_status=ContractStatus.SIGNED,
+        )
+
+    db_session.refresh(contract)
+    assert contract.status == ContractStatus.APPROVAL
+    assert contract.version == before_version
+    assert _audit_count(db_session, "contract.status_changed") == before_audit
+
+
+def test_signing_sets_original_end_date_once(
+    db_session: Session,
+    test_user: dict[str, object],
+) -> None:
+    from app.modules.contracts.lifecycle import ContractLifecycleService
+
+    customer = _organization(db_session)
+    lifecycle = ContractLifecycleService()
+
+    contract = _prepare_signable_contract(
+        db_session, test_user, customer, number="CAPTURE-END"
+    )
+    contract.status = ContractStatus.APPROVAL
+    db_session.commit()
+    lifecycle.change_status(
+        db_session,
+        actor_id=_actor_id(test_user),
+        contract=contract,
+        target_status=ContractStatus.SIGNED,
+    )
+    assert contract.original_end_date == date(2026, 9, 30)
+
+    preserved = _prepare_signable_contract(
+        db_session, test_user, customer, number="PRESERVE-END"
+    )
+    preserved.status = ContractStatus.APPROVAL
+    preserved.original_end_date = date(2026, 9, 15)
+    db_session.commit()
+    lifecycle.change_status(
+        db_session,
+        actor_id=_actor_id(test_user),
+        contract=preserved,
+        target_status=ContractStatus.SIGNED,
+    )
+    assert preserved.original_end_date == date(2026, 9, 15)
+
+
+def test_manual_status_change_cannot_start_signed_contract(
+    db_session: Session,
+    test_user: dict[str, object],
+) -> None:
+    from app.modules.contracts.lifecycle import ContractLifecycleService
+
+    customer = _organization(db_session)
+    contract = _prepare_signable_contract(
+        db_session, test_user, customer, number="NO-MANUAL-START"
+    )
+    contract.status = ContractStatus.SIGNED
+    contract.original_end_date = contract.end_date
+    db_session.commit()
+    before_version = contract.version
+    before_audit = _audit_count(db_session, "contract.status_changed")
+
+    with pytest.raises(ContractValidationError):
+        ContractLifecycleService().change_status(
+            db_session,
+            actor_id=_actor_id(test_user),
+            contract=contract,
+            target_status=ContractStatus.IN_PROGRESS,
+        )
+
+    db_session.refresh(contract)
+    assert contract.status == ContractStatus.SIGNED
+    assert contract.version == before_version
+    assert _audit_count(db_session, "contract.status_changed") == before_audit
+
+
+def test_mark_work_started_accepts_only_signed_contract(
+    db_session: Session,
+    test_user: dict[str, object],
+) -> None:
+    from app.modules.contracts.lifecycle import ContractLifecycleService
+
+    customer = _organization(db_session)
+    lifecycle = ContractLifecycleService()
+    actor_id = _actor_id(test_user)
+
+    signed = _prepare_signable_contract(
+        db_session, test_user, customer, number="WORK-START"
+    )
+    signed.status = ContractStatus.SIGNED
+    signed.original_end_date = signed.end_date
+    db_session.commit()
+    before_version = signed.version
+    before_audit = _audit_count(db_session, "contract.work_started")
+
+    result = lifecycle.mark_work_started(
+        db_session,
+        actor_id=actor_id,
+        contract=signed,
+    )
+    assert result.status == ContractStatus.IN_PROGRESS
+    assert result.version == before_version + 1
+    assert _audit_count(db_session, "contract.work_started") == before_audit + 1
+
+    approval = _prepare_signable_contract(
+        db_session, test_user, customer, number="WORK-REJECT"
+    )
+    approval.status = ContractStatus.APPROVAL
+    db_session.commit()
+    rejected_version = approval.version
+    rejected_audit = _audit_count(db_session, "contract.work_started")
+
+    with pytest.raises(ContractValidationError):
+        lifecycle.mark_work_started(
+            db_session,
+            actor_id=actor_id,
+            contract=approval,
+        )
+    db_session.refresh(approval)
+    assert approval.status == ContractStatus.APPROVAL
+    assert approval.version == rejected_version
+    assert _audit_count(db_session, "contract.work_started") == rejected_audit
+
+
+def test_get_contract_for_update_excludes_deleted_contract(
+    db_session: Session,
+    test_user: dict[str, object],
+) -> None:
+    from app.modules.contracts.repository import get_contract_for_update
+
+    customer = _organization(db_session)
+    contract = _contract(db_session, test_user, customer)
+    assert get_contract_for_update(db_session, contract.id) is not None
+
+    ContractService().delete_contract(
+        db_session,
+        actor_id=_actor_id(test_user),
+        contract=contract,
+    )
+    assert get_contract_for_update(db_session, contract.id) is None
