@@ -39,6 +39,12 @@ def _create_user(db: Session, *, username: str) -> User:
     return user
 
 
+def _employee(db: Session, user: User) -> Employee:
+    employee = db.get(Employee, user.employee_id)
+    assert employee is not None
+    return employee
+
+
 def _grant(
     db: Session,
     *,
@@ -110,10 +116,6 @@ def _task(
     return task
 
 
-def _related(*organization_ids: uuid.UUID) -> dict[str, list[str]]:
-    return {"organization_ids": [str(value) for value in organization_ids]}
-
-
 def test_tasks_require_authentication_and_exact_read_permission(
     db_session: Session,
     client,
@@ -138,14 +140,15 @@ def test_tasks_assigned_scope_filters_list_and_non_enumerates_detail(
 ) -> None:
     creator_user = _create_user(db_session, username="tasks-fixture-creator")
     viewer = _create_user(db_session, username="tasks-assigned-viewer")
+    creator_employee = _employee(db_session, creator_user)
     assigned = _task(
         db_session,
-        creator=creator_user.employee,
+        creator=creator_employee,
         title="Assigned visible task",
     )
     foreign = _task(
         db_session,
-        creator=creator_user.employee,
+        creator=creator_employee,
         title="Foreign hidden task",
     )
     db_session.add(TaskAssignee(task_id=assigned.id, employee_id=viewer.employee_id))
@@ -174,8 +177,9 @@ def test_tasks_assigned_scope_filters_list_and_non_enumerates_detail(
 
 def test_tasks_view_all_is_global_read_only_override(db_session: Session, client) -> None:
     creator = _create_user(db_session, username="tasks-view-all-creator")
-    _task(db_session, creator=creator.employee, title="Global task one")
-    _task(db_session, creator=creator.employee, title="Global task two")
+    creator_employee = _employee(db_session, creator)
+    _task(db_session, creator=creator_employee, title="Global task one")
+    _task(db_session, creator=creator_employee, title="Global task two")
     manager = _create_user(db_session, username="tasks-view-all-manager")
     _grant(
         db_session,
@@ -250,7 +254,11 @@ def test_task_patch_is_scoped_and_cannot_write_status(
 ) -> None:
     owner = _create_user(db_session, username="tasks-own-editor")
     outsider = _create_user(db_session, username="tasks-own-outsider")
-    task = _task(db_session, creator=owner.employee, title="Editable task")
+    task = _task(
+        db_session,
+        creator=_employee(db_session, owner),
+        title="Editable task",
+    )
     for user in (owner, outsider):
         _grant(
             db_session,
@@ -292,7 +300,11 @@ def test_assign_and_status_commands_use_separate_permissions(
 ) -> None:
     creator = _create_user(db_session, username="tasks-command-creator")
     assignee = _create_user(db_session, username="tasks-command-assignee")
-    task = _task(db_session, creator=creator.employee, title="Command task")
+    task = _task(
+        db_session,
+        creator=_employee(db_session, creator),
+        title="Command task",
+    )
     editor = _create_user(db_session, username="tasks-command-editor")
     assigner = _create_user(db_session, username="tasks-command-assigner")
     status_user = _create_user(db_session, username="tasks-command-status")
@@ -358,9 +370,10 @@ def test_delete_restore_and_registry_filters(db_session: Session, client) -> Non
     organization = Organization(legal_name="Task Filter Organization")
     db_session.add(organization)
     db_session.flush()
+    user_employee = _employee(db_session, user)
     overdue = _task(
         db_session,
-        creator=user.employee,
+        creator=user_employee,
         title="Overdue urgent task",
         due_date=date.today() - timedelta(days=2),
         priority=TaskPriority.URGENT,
@@ -375,7 +388,7 @@ def test_delete_restore_and_registry_filters(db_session: Session, client) -> Non
     )
     completed = _task(
         db_session,
-        creator=user.employee,
+        creator=user_employee,
         title="Completed old task",
         due_date=date.today() - timedelta(days=5),
         status=TaskStatus.COMPLETED,
