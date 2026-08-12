@@ -3,13 +3,15 @@ import uuid
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from app.modules.contracts.enums import ContractStatus
+from app.modules.contracts.enums import ContractAddendumStatus, ContractStatus
 from app.modules.contracts.models import (
     Contract,
+    ContractAddendum,
     ContractItem,
     ContractItemBuilding,
     ContractItemTechnicalDevice,
     ContractResponsible,
+    ContractSuspension,
     ExpertiseType,
 )
 from app.modules.identity.authorization import AuthorizationContext
@@ -66,6 +68,120 @@ def get_contract(
         stmt = stmt.where(Contract.deleted_at.is_(None))
     stmt = _apply_contract_scope(stmt, authorization)
     return db.scalar(stmt)
+
+
+def get_contract_for_update(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> Contract | None:
+    return db.scalar(
+        sa.select(Contract)
+        .where(
+            Contract.id == contract_id,
+            Contract.deleted_at.is_(None),
+        )
+        .with_for_update()
+    )
+
+
+def get_open_contract_suspension(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> ContractSuspension | None:
+    return db.scalar(
+        sa.select(ContractSuspension).where(
+            ContractSuspension.contract_id == contract_id,
+            ContractSuspension.ended_at.is_(None),
+        )
+    )
+
+
+def list_contract_suspensions(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> list[ContractSuspension]:
+    return list(
+        db.scalars(
+            sa.select(ContractSuspension)
+            .where(ContractSuspension.contract_id == contract_id)
+            .order_by(
+                ContractSuspension.started_at.asc(),
+                ContractSuspension.id.asc(),
+            )
+        ).all()
+    )
+
+
+def get_contract_addendum(
+    db: Session,
+    contract_id: uuid.UUID,
+    addendum_id: uuid.UUID,
+    *,
+    include_deleted: bool = False,
+) -> ContractAddendum | None:
+    stmt = sa.select(ContractAddendum).where(
+        ContractAddendum.id == addendum_id,
+        ContractAddendum.contract_id == contract_id,
+    )
+    if not include_deleted:
+        stmt = stmt.where(ContractAddendum.deleted_at.is_(None))
+    return db.scalar(stmt)
+
+
+def get_contract_addendum_for_update(
+    db: Session,
+    contract_id: uuid.UUID,
+    addendum_id: uuid.UUID,
+) -> ContractAddendum | None:
+    return db.scalar(
+        sa.select(ContractAddendum)
+        .where(
+            ContractAddendum.id == addendum_id,
+            ContractAddendum.contract_id == contract_id,
+            ContractAddendum.deleted_at.is_(None),
+        )
+        .with_for_update()
+    )
+
+
+def list_contract_addenda(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> list[ContractAddendum]:
+    return list(
+        db.scalars(
+            sa.select(ContractAddendum)
+            .where(
+                ContractAddendum.contract_id == contract_id,
+                ContractAddendum.deleted_at.is_(None),
+            )
+            .order_by(
+                ContractAddendum.addendum_date.asc(),
+                ContractAddendum.created_at.asc(),
+                ContractAddendum.id.asc(),
+            )
+        ).all()
+    )
+
+
+def list_signed_contract_addenda(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> list[ContractAddendum]:
+    return list(
+        db.scalars(
+            sa.select(ContractAddendum)
+            .where(
+                ContractAddendum.contract_id == contract_id,
+                ContractAddendum.deleted_at.is_(None),
+                ContractAddendum.status == ContractAddendumStatus.SIGNED,
+            )
+            .order_by(
+                ContractAddendum.signed_at.asc().nullslast(),
+                ContractAddendum.id.asc(),
+            )
+        ).all()
+    )
 
 
 def list_contracts_paginated(
@@ -130,6 +246,29 @@ def get_contract_responsible_ids(db: Session, contract_id: uuid.UUID) -> set[uui
                 ContractResponsible.contract_id == contract_id
             )
         ).all()
+    )
+
+
+def count_contract_responsibles(db: Session, contract_id: uuid.UUID) -> int:
+    return int(
+        db.scalar(
+            sa.select(sa.func.count()).select_from(ContractResponsible).where(
+                ContractResponsible.contract_id == contract_id
+            )
+        )
+        or 0
+    )
+
+
+def count_active_contract_items(db: Session, contract_id: uuid.UUID) -> int:
+    return int(
+        db.scalar(
+            sa.select(sa.func.count()).select_from(ContractItem).where(
+                ContractItem.contract_id == contract_id,
+                ContractItem.deleted_at.is_(None),
+            )
+        )
+        or 0
     )
 
 

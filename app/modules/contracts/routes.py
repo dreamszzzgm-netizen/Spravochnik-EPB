@@ -7,17 +7,28 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.modules.buildings.repository import get_building
 from app.modules.contracts import repository
+from app.modules.contracts.addenda import ContractAddendumService
 from app.modules.contracts.enums import ContractStatus
-from app.modules.contracts.models import Contract, ContractItem
+from app.modules.contracts.lifecycle import ContractLifecycleService
+from app.modules.contracts.models import Contract, ContractAddendum, ContractItem
 from app.modules.contracts.schemas import (
+    CompletionBlockerResponse,
+    CompletionCheckResponse,
+    ContractAddendumCreate,
+    ContractAddendumResponse,
+    ContractAddendumStatusChange,
+    ContractAddendumUpdate,
+    ContractCompletionReadinessResponse,
     ContractCreate,
     ContractItemCreate,
     ContractItemResponse,
     ContractItemUpdate,
     ContractPaginatedResponse,
+    ContractReasonCommand,
     ContractResponse,
     ContractResponsiblesReplace,
     ContractResponsiblesResponse,
+    ContractStatusChange,
     ContractUpdate,
     ExpertiseTypeResponse,
 )
@@ -38,6 +49,8 @@ from app.modules.technical_devices.repository import get_technical_device
 router = APIRouter(prefix="/api/contracts", tags=["contracts"])
 reference_router = APIRouter(prefix="/api/reference", tags=["reference"])
 service = ContractService()
+lifecycle_service = ContractLifecycleService()
+addendum_service = ContractAddendumService()
 
 
 def _contract_or_404(
@@ -70,6 +83,16 @@ def _contract_or_404(
     return contract
 
 
+def _locked_contract_or_404(db: Session, contract: Contract) -> Contract:
+    locked = repository.get_contract_for_update(db, contract.id)
+    if locked is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contract not found",
+        )
+    return locked
+
+
 def _item_or_404(
     db: Session,
     contract_id: uuid.UUID,
@@ -82,6 +105,20 @@ def _item_or_404(
             detail="Contract item not found",
         )
     return item
+
+
+def _addendum_or_404(
+    db: Session,
+    contract_id: uuid.UUID,
+    addendum_id: uuid.UUID,
+) -> ContractAddendum:
+    addendum = repository.get_contract_addendum(db, contract_id, addendum_id)
+    if addendum is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contract not found",
+        )
+    return addendum
 
 
 def _permission_context_or_none(
@@ -312,7 +349,10 @@ def delete_contract(
     db: Session = Depends(get_db),
 ) -> Response:
     contract = _contract_or_404(db, contract_id, ctx=ctx)
-    service.delete_contract(db, actor_id=ctx.user_id, contract=contract)
+    try:
+        service.delete_contract(db, actor_id=ctx.user_id, contract=contract)
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -490,13 +530,314 @@ def delete_contract_item(
 ) -> Response:
     contract = _contract_or_404(db, contract_id, ctx=ctx)
     item = _item_or_404(db, contract_id, item_id)
-    service.delete_item(
-        db,
-        actor_id=ctx.user_id,
-        contract=contract,
-        item=item,
-    )
+    try:
+        service.delete_item(
+            db,
+            actor_id=ctx.user_id,
+            contract=contract,
+            item=item,
+        )
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{contract_id}/status", response_model=ContractResponse)
+def change_contract_status(
+    contract_id: uuid.UUID,
+    payload: ContractStatusChange,
+    ctx: AuthorizationContext = Depends(
+        require_scoped_permission("contracts.change_status")
+    ),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    contract = _locked_contract_or_404(db, contract)
+    try:
+        return lifecycle_service.change_status(
+            db,
+            actor_id=ctx.user_id,
+            contract=contract,
+            target_status=payload.status,
+        )
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+
+
+@router.post("/{contract_id}/suspend", response_model=ContractResponse)
+def suspend_contract(
+    contract_id: uuid.UUID,
+    payload: ContractReasonCommand,
+    ctx: AuthorizationContext = Depends(
+        require_scoped_permission("contracts.change_status")
+    ),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    contract = _locked_contract_or_404(db, contract)
+    try:
+        lifecycle_service.suspend(
+            db,
+            actor_id=ctx.user_id,
+            contract=contract,
+            reason=payload.reason,
+        )
+        db.refresh(contract)
+        return contract
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+
+
+@router.post("/{contract_id}/resume", response_model=ContractResponse)
+def resume_contract(
+    contract_id: uuid.UUID,
+    ctx: AuthorizationContext = Depends(
+        require_scoped_permission("contracts.change_status")
+    ),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    contract = _locked_contract_or_404(db, contract)
+    try:
+        lifecycle_service.resume(db, actor_id=ctx.user_id, contract=contract)
+        db.refresh(contract)
+        return contract
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+
+
+@router.post("/{contract_id}/terminate", response_model=ContractResponse)
+def terminate_contract(
+    contract_id: uuid.UUID,
+    payload: ContractReasonCommand,
+    ctx: AuthorizationContext = Depends(
+        require_scoped_permission("contracts.terminate")
+    ),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    contract = _locked_contract_or_404(db, contract)
+    try:
+        return lifecycle_service.terminate(
+            db,
+            actor_id=ctx.user_id,
+            contract=contract,
+            reason=payload.reason,
+        )
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+
+
+@router.get(
+    "/{contract_id}/completion-readiness",
+    response_model=ContractCompletionReadinessResponse,
+)
+def read_contract_completion_readiness(
+    contract_id: uuid.UUID,
+    ctx: AuthorizationContext = Depends(require_scoped_permission("contracts.view")),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    readiness = lifecycle_service.get_completion_readiness(db, contract=contract)
+    return ContractCompletionReadinessResponse(
+        ready_to_complete=readiness.ready_to_complete,
+        checks=[
+            CompletionCheckResponse(
+                key=check.key,
+                passed=check.passed,
+                blockers=[
+                    CompletionBlockerResponse(code=blocker.code, detail=blocker.detail)
+                    for blocker in check.blockers
+                ],
+            )
+            for check in readiness.checks
+        ],
+        blockers=[
+            CompletionBlockerResponse(code=blocker.code, detail=blocker.detail)
+            for blocker in readiness.blockers
+        ],
+    )
+
+
+@router.post("/{contract_id}/complete", response_model=ContractResponse)
+def complete_contract(
+    contract_id: uuid.UUID,
+    ctx: AuthorizationContext = Depends(require_scoped_permission("contracts.complete")),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    contract = _locked_contract_or_404(db, contract)
+    try:
+        return lifecycle_service.complete(
+            db,
+            actor_id=ctx.user_id,
+            contract=contract,
+        )
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+
+
+@router.get(
+    "/{contract_id}/addenda",
+    response_model=list[ContractAddendumResponse],
+)
+def read_contract_addenda(
+    contract_id: uuid.UUID,
+    ctx: AuthorizationContext = Depends(require_scoped_permission("contracts.view")),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    return repository.list_contract_addenda(db, contract.id)
+
+
+@router.post(
+    "/{contract_id}/addenda",
+    response_model=ContractAddendumResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_contract_addendum(
+    contract_id: uuid.UUID,
+    payload: ContractAddendumCreate,
+    ctx: AuthorizationContext = Depends(
+        require_scoped_permission("contracts.manage_addenda")
+    ),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    try:
+        return addendum_service.create_addendum(
+            db,
+            actor_id=ctx.user_id,
+            contract=contract,
+            number=payload.number,
+            addendum_date=payload.addendum_date,
+            amount_delta=payload.amount_delta,
+            new_end_date=payload.new_end_date,
+            description=payload.description,
+        )
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+
+
+@router.get(
+    "/{contract_id}/addenda/{addendum_id}",
+    response_model=ContractAddendumResponse,
+)
+def read_contract_addendum(
+    contract_id: uuid.UUID,
+    addendum_id: uuid.UUID,
+    ctx: AuthorizationContext = Depends(require_scoped_permission("contracts.view")),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    return _addendum_or_404(db, contract.id, addendum_id)
+
+
+@router.patch(
+    "/{contract_id}/addenda/{addendum_id}",
+    response_model=ContractAddendumResponse,
+)
+def update_contract_addendum(
+    contract_id: uuid.UUID,
+    addendum_id: uuid.UUID,
+    payload: ContractAddendumUpdate,
+    ctx: AuthorizationContext = Depends(
+        require_scoped_permission("contracts.manage_addenda")
+    ),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    addendum = _addendum_or_404(db, contract.id, addendum_id)
+    fields = payload.model_fields_set
+
+    if "number" in fields and payload.number is None:
+        raise _unprocessable("Номер дополнительного соглашения обязателен")
+    if "addendum_date" in fields and payload.addendum_date is None:
+        raise _unprocessable("Дата дополнительного соглашения обязательна")
+
+    try:
+        return addendum_service.update_addendum(
+            db,
+            actor_id=ctx.user_id,
+            contract=contract,
+            addendum=addendum,
+            number=payload.number if "number" in fields else addendum.number,
+            addendum_date=(
+                payload.addendum_date
+                if "addendum_date" in fields
+                else addendum.addendum_date
+            ),
+            amount_delta=(
+                payload.amount_delta
+                if "amount_delta" in fields
+                else addendum.amount_delta
+            ),
+            new_end_date=(
+                payload.new_end_date
+                if "new_end_date" in fields
+                else addendum.new_end_date
+            ),
+            description=(
+                payload.description
+                if "description" in fields
+                else addendum.description
+            ),
+        )
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+
+
+@router.delete(
+    "/{contract_id}/addenda/{addendum_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_contract_addendum(
+    contract_id: uuid.UUID,
+    addendum_id: uuid.UUID,
+    ctx: AuthorizationContext = Depends(
+        require_scoped_permission("contracts.manage_addenda")
+    ),
+    db: Session = Depends(get_db),
+) -> Response:
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    addendum = _addendum_or_404(db, contract.id, addendum_id)
+    try:
+        addendum_service.delete_addendum(
+            db,
+            actor_id=ctx.user_id,
+            contract=contract,
+            addendum=addendum,
+        )
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{contract_id}/addenda/{addendum_id}/status",
+    response_model=ContractAddendumResponse,
+)
+def change_contract_addendum_status(
+    contract_id: uuid.UUID,
+    addendum_id: uuid.UUID,
+    payload: ContractAddendumStatusChange,
+    ctx: AuthorizationContext = Depends(
+        require_scoped_permission("contracts.manage_addenda")
+    ),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    addendum = _addendum_or_404(db, contract.id, addendum_id)
+    try:
+        return addendum_service.change_status(
+            db,
+            actor_id=ctx.user_id,
+            contract=contract,
+            addendum=addendum,
+            target_status=payload.status,
+        )
+    except ContractValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
 
 
 @reference_router.get(

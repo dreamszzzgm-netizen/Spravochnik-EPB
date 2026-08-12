@@ -10,3 +10,10 @@ class ContractStatus(enum.StrEnum):
     COMPLETED = "completed"
     TERMINATED = "terminated"
     ARCHIVED = "archived"
+
+
+class ContractAddendumStatus(enum.StrEnum):
+    DRAFT = "draft"
+    APPROVAL = "approval"
+    SIGNED = "signed"
+    CANCELLED = "cancelled"

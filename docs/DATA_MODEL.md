@@ -358,6 +358,7 @@ number
 contract_date
 start_date NULL
 end_date NULL
+original_end_date NULL
 amount NUMERIC
 currency CHAR(3) DEFAULT 'RUB'
 status
@@ -381,6 +382,17 @@ version
 - terminated;
 - archived.
 
+`original_end_date` фиксируется один раз при первом переходе `approval -> signed` и хранит исходный договорный срок. `end_date` после подписания является действующим сроком и изменяется только подписанным дополнительным соглашением.
+
+`amount` является материализованной действующей суммой:
+
+```text
+SUM(active contract_items.price)
++ SUM(active signed contract_addenda.amount_delta)
+```
+
+Итоговая сумма не может быть отрицательной.
+
 Уникальность номера может быть настроена в рамках года/организации.
 
 ---
@@ -396,6 +408,9 @@ role_note NULL
 PRIMARY KEY (contract_id, employee_id)
 ```
 
+Ответственные могут изменяться до terminal-статуса договора.
+
+---
 
 ## 17.1. contract_suspensions
 
@@ -404,12 +419,16 @@ id
 contract_id FK contracts
 started_at TIMESTAMPTZ
 ended_at TIMESTAMPTZ NULL
-reason NULL
+reason NOT NULL
 created_by FK users
 created_at TIMESTAMPTZ
 ```
 
-Ограничение: одновременно не более одного открытого периода на договор.
+Ограничение: одновременно не более одного открытого периода на договор. В PostgreSQL это дополнительно обеспечивается partial unique index:
+
+```text
+UNIQUE(contract_id) WHERE ended_at IS NULL
+```
 
 ---
 
@@ -427,11 +446,11 @@ amount_delta NUMERIC NULL
 currency CHAR(3) DEFAULT 'RUB'
 new_end_date DATE NULL
 description NULL
-document_id FK documents NULL
-created_at TIMESTAMPTZ
+signed_at TIMESTAMPTZ NULL
 created_by FK users
+updated_by FK users
+created_at TIMESTAMPTZ
 updated_at TIMESTAMPTZ
-updated_by FK users NULL
 deleted_at TIMESTAMPTZ NULL
 version
 ```
@@ -444,8 +463,16 @@ version
 
 Правила:
 - дополнительное соглашение не заменяет исходный договор;
+- `signed` и `cancelled` являются terminal-статусами дополнительного соглашения;
 - изменение суммы/срока применяется только после перехода соглашения в `signed`;
-- исторические значения договора должны быть воспроизводимы по договору и подписанным дополнительным соглашениям.
+- при подписании `signed_at` фиксируется один раз;
+- сумма договора пересчитывается из active items + всех active signed addenda, поэтому повторный вызов signing не может повторно применить delta;
+- `new_end_date`, если задан, меняет `contracts.end_date`, но не `contracts.original_end_date`;
+- продление срока требует непустого бизнес-обоснования в `description`;
+- projected effective amount не может стать отрицательным;
+- исторические значения договора воспроизводимы по `original_end_date`, неизменяемым после подписания contract items и цепочке подписанных addenda.
+
+`document_id` намеренно **не входит в физическую таблицу CP4.2**. Опциональная связь дополнительного соглашения с документом добавляется миграцией Stage 8 после появления Documents-модуля.
 
 ---
 
@@ -467,7 +494,9 @@ deleted_at
 version
 ```
 
-Сумма договора вычисляется как сумма активных `contract_items.price`.
+До подписания предметы договора изменяемы по бизнес-правам. После подписания состав предметов и их цены замораживаются.
+
+Базовая сумма договора = сумма активных `contract_items.price`. Действующая сумма дополнительно включает `amount_delta` всех active signed `contract_addenda`.
 
 ---
 
@@ -495,6 +524,7 @@ PRIMARY KEY (contract_item_id, building_id)
 
 Будущая документация добавляется отдельной FK-связью миграцией.
 
+---
 
 ## 20. expertise_types
 
@@ -556,6 +586,7 @@ OR
 
 PostgreSQL гарантирует `1 экспертиза = 1 существующий предмет`.
 
+---
 
 ## 22. expertise_contract_items
 
@@ -795,6 +826,7 @@ changed_by FK users
 reason NULL
 ```
 
+---
 
 ## 32. technical_device_rtn_records
 
@@ -1134,6 +1166,7 @@ UNIQUE:
 
 `documents.current_version_id` должен ссылаться на версию того же `document_id`. Рекомендуется composite FK/unique strategy либо эквивалентный DB constraint; одной application-проверки недостаточно.
 
+---
 
 ## 43. Связи документов
 
@@ -1195,6 +1228,7 @@ pmla_id FK pmlas
 PRIMARY KEY (document_id, pmla_id)
 ```
 
+---
 
 ## 44. document_types
 
@@ -1246,6 +1280,7 @@ technical_device.serial_number
 expertise.internal_number
 ```
 
+---
 
 ## 46. generated_documents
 
@@ -1275,6 +1310,7 @@ generated_by FK users
 CHECK: для одной генерации заполнен ровно один основной context FK из списка выше. Если документ агрегирует данные связанных сущностей, дополнительные связи восстанавливаются через `document_*` link-таблицы и `context_snapshot`.
 
 ---
+
 ## 47. normative_document_types
 
 Типы НПД.
@@ -1324,6 +1360,7 @@ UNIQUE(normative_document_id, revision_number)
 
 Старая редакция не перезаписывается.
 
+---
 
 ## 49. Применимость НПД
 
@@ -1351,6 +1388,7 @@ PRIMARY KEY (normative_document_id, expertise_type_id)
 ```
 
 ---
+
 ## 50. expertise_normative_document_versions
 
 ```text
@@ -1854,6 +1892,7 @@ last_error NULL
 correlation_id NULL
 ```
 
+---
 
 ## 65. import_jobs
 
@@ -2011,6 +2050,8 @@ opos 1 ── N technical_devices
 opos 1 ── N buildings
 
 contracts 1 ── N contract_items
+contracts 1 ── N contract_suspensions
+contracts 1 ── N contract_addenda
 contracts N ── 1 organizations
 
 contract_items N ── M subjects
@@ -2056,6 +2097,9 @@ users 1 ── N user_sessions
 8. Завершённая задача не может считаться просроченной.
 9. Soft-deleted записи не участвуют в обычных рабочих выборках.
 10. Физический файл одной версии не должен случайно перезаписываться другой версией.
+11. Одновременно существует не более одного открытого `contract_suspensions` на договор.
+12. Подписанные/отменённые `contract_addenda` не изменяются и не удаляются как обычные записи.
+13. Effective contract amount не может быть отрицательной.
 
 ---
 
@@ -2078,6 +2122,8 @@ users 1 ── N user_sessions
 
 Составные индексы определяются после анализа реальных запросов UI.
 
+Для CP4.2 дополнительно используется partial unique index `contract_suspensions(contract_id) WHERE ended_at IS NULL`.
+
 ---
 
 ## 76. Миграции
@@ -2085,6 +2131,8 @@ users 1 ── N user_sessions
 Все таблицы и изменения схемы создаются миграциями.
 
 Схема не должна модифицироваться хаотично во время обычного выполнения приложения.
+
+Stage 4 CP4.2 migration head: `0012_stage4_contract_lifecycle` (`0012_stage4_contract_lifecycle_addenda.py`).
 
 ---
 
@@ -2146,15 +2194,19 @@ FK / UNIQUE / CHECK / INDEX / transaction / service rule
 10. optimistic locking обязателен для ключевых карточек;
 11. профессиональная функция сотрудника не выдаёт authorization permission;
 12. активная user-role-scope assignment уникальна;
-13. подписанное дополнительное соглашение является единственным состоянием, влияющим на сумму/срок договора;
+13. подписанное дополнительное соглашение является единственным состоянием, влияющим на addendum-изменение суммы/срока договора;
 14. documents.current_version_id принадлежит тому же document;
 15. notification dedup_key уникален для непустых значений;
 16. workflow task сохраняет source workflow revision;
-17. linked production-control violation/action относятся к одному плану.
+17. linked production-control violation/action относятся к одному плану;
+18. `contracts.original_end_date` после первого подписания неизменяем;
+19. действующая сумма договора = active items + active signed addenda deltas и неотрицательна;
+20. signed/cancelled addendum terminal и не отменяется задним числом.
 
+---
 
 ## Статус
 
 **Документ:** Data Model v1.2  
-**Состояние:** Revised and synchronized after full project review  
-**Следующий этап:** технический Этап 0; бизнес-миграции Этапа 1+ должны соответствовать этой модели.
+**Состояние:** Synchronized with Stage 4 CP4.2 contract lifecycle/addenda backend  
+**Следующий этап:** Stage 5/6/8 добавляют свои реальные FK/providers без изменения CP4.2 contract invariants.

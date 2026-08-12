@@ -153,6 +153,18 @@ contracts.manage_items
 contracts.manage_addenda
 ```
 
+Назначение специальных прав CP4.2:
+- `contracts.change_status` — только обычные переходы договора (`draft -> approval`, `approval -> signed`, архивирование) и команды приостановки/возобновления;
+- `contracts.terminate` — только расторжение договора;
+- `contracts.complete` — только ручное завершение после успешного серверного readiness-check;
+- `contracts.manage_addenda` — создание, изменение, удаление и смена статуса дополнительных соглашений;
+- `contracts.manage_items` — управление предметами договора до подписания;
+- `contracts.manage_responsibles` — управление ответственными до terminal-статуса.
+
+Одно специальное право **не заменяет** другое. Например, наличие `contracts.change_status` не разрешает расторжение или завершение, а `contracts.manage_addenda` не предоставляет `contracts.view` для чтения списка дополнительных соглашений.
+
+Все contract permissions работают совместно со scope `ALL / ASSIGNED / RELATED / OWN`. Совпадение scope не компенсирует отсутствие требуемого permission code; отсутствие доступа к договору/вложенному дополнительному соглашению не должно раскрывать существование записи и возвращается через общий 404 policy.
+
 Рекомендуемо:
 - руководитель: полный бизнес-доступ;
 - ответственный: полный доступ к своим договорам;
@@ -443,5 +455,5 @@ Permission и scope всегда проверяются совместно на 
 ## Статус
 
 **Документ:** Permissions v1.2  
-**Состояние:** Revised and synchronized after full project review  
-**Следующий этап:** технический Этап 0; authorization-модель v1.2 обязательна до Этапа 1.
+**Состояние:** Synchronized with Stage 4 CP4.2 contract lifecycle/addenda backend  
+**Следующий этап:** при расширении Tasks/Expertises/Documents подключать собственные permissions/providers без ослабления contract permission isolation.
