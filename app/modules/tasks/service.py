@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from collections.abc import Iterable
 
 import sqlalchemy as sa
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.buildings.models import Building
@@ -283,7 +284,9 @@ class TaskService:
         normalized = sorted(set(employee_ids), key=str)
         if not normalized:
             return []
-        employees = db.scalars(select(Employee).where(Employee.id.in_(normalized))).all()
+        employees = db.scalars(
+            select(Employee).where(Employee.id.in_(normalized))
+        ).all()
         by_id = {employee.id: employee for employee in employees}
         if any(
             employee_id not in by_id or by_id[employee_id].deleted_at is not None
@@ -308,7 +311,10 @@ class TaskService:
                 entity_id=link.entity_id,
                 is_primary=link.is_primary or (previous.is_primary if previous else False),
             )
-        normalized = sorted(merged.values(), key=lambda item: (item.kind.value, str(item.entity_id)))
+        normalized = sorted(
+            merged.values(),
+            key=lambda item: (item.kind.value, str(item.entity_id)),
+        )
         if not is_personal and not normalized:
             raise TaskValidationError("Рабочая задача должна иметь бизнес-связь")
         if sum(1 for link in normalized if link.is_primary) > 1:
@@ -371,7 +377,10 @@ class TaskService:
         if delete_existing:
             db.execute(sa.delete(TaskAssignee).where(TaskAssignee.task_id == task_id))
         db.add_all(
-            [TaskAssignee(task_id=task_id, employee_id=employee_id) for employee_id in employee_ids]
+            [
+                TaskAssignee(task_id=task_id, employee_id=employee_id)
+                for employee_id in employee_ids
+            ]
         )
 
     @staticmethod
@@ -396,22 +405,34 @@ class TaskService:
 
         row_factories = {
             TaskLinkKind.ORGANIZATION: lambda link: TaskOrganization(
-                task_id=task_id, organization_id=link.entity_id, is_primary=link.is_primary
+                task_id=task_id,
+                organization_id=link.entity_id,
+                is_primary=link.is_primary,
             ),
             TaskLinkKind.CONTRACT: lambda link: TaskContract(
-                task_id=task_id, contract_id=link.entity_id, is_primary=link.is_primary
+                task_id=task_id,
+                contract_id=link.entity_id,
+                is_primary=link.is_primary,
             ),
             TaskLinkKind.CONTRACT_ITEM: lambda link: TaskContractItem(
-                task_id=task_id, contract_item_id=link.entity_id, is_primary=link.is_primary
+                task_id=task_id,
+                contract_item_id=link.entity_id,
+                is_primary=link.is_primary,
             ),
             TaskLinkKind.TECHNICAL_DEVICE: lambda link: TaskTechnicalDevice(
-                task_id=task_id, technical_device_id=link.entity_id, is_primary=link.is_primary
+                task_id=task_id,
+                technical_device_id=link.entity_id,
+                is_primary=link.is_primary,
             ),
             TaskLinkKind.BUILDING: lambda link: TaskBuilding(
-                task_id=task_id, building_id=link.entity_id, is_primary=link.is_primary
+                task_id=task_id,
+                building_id=link.entity_id,
+                is_primary=link.is_primary,
             ),
             TaskLinkKind.OPO: lambda link: TaskOPO(
-                task_id=task_id, opo_id=link.entity_id, is_primary=link.is_primary
+                task_id=task_id,
+                opo_id=link.entity_id,
+                is_primary=link.is_primary,
             ),
         }
         db.add_all([row_factories[link.kind](link) for link in links])
