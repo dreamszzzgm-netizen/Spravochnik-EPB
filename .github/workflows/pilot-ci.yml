@@ -9,6 +9,7 @@ on:
       - "deploy/pilot/**"
       - "frontend/**"
       - "docs/PILOT_DEPLOYMENT.md"
+      - "PROJECT_STATUS.md"
       - "tests/unit/test_pilot_deployment_contract.py"
       - ".github/workflows/pilot-ci.yml"
   pull_request:
@@ -19,6 +20,7 @@ on:
       - "deploy/pilot/**"
       - "frontend/**"
       - "docs/PILOT_DEPLOYMENT.md"
+      - "PROJECT_STATUS.md"
       - "tests/unit/test_pilot_deployment_contract.py"
       - ".github/workflows/pilot-ci.yml"
 
@@ -73,10 +75,26 @@ jobs:
 
       - name: Validate Compose configuration
         run: |
-          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml config > /tmp/pilot-rendered.yml
-          grep -q '33000:3000' /tmp/pilot-rendered.yml
-          ! grep -q '5432:5432' /tmp/pilot-rendered.yml
-          ! grep -q '8000:8000' /tmp/pilot-rendered.yml
+          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml config --format json > /tmp/pilot-rendered.json
+          python - <<'PY'
+          import json
+
+          with open('/tmp/pilot-rendered.json', encoding='utf-8') as stream:
+              config = json.load(stream)
+
+          services = config['services']
+          frontend_ports = services['frontend'].get('ports', [])
+          assert any(
+              str(port.get('published')) == '33000' and int(port['target']) == 3000
+              for port in frontend_ports
+          ), frontend_ports
+
+          for service_name in ('postgres', 'migrate', 'backend', 'worker', 'scheduler', 'backup'):
+              assert not services[service_name].get('ports'), (
+                  service_name,
+                  services[service_name].get('ports'),
+              )
+          PY
 
       - name: Build pilot images
         run: |
