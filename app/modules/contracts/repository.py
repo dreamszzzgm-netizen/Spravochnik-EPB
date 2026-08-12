@@ -3,9 +3,10 @@ import uuid
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from app.modules.contracts.enums import ContractStatus
+from app.modules.contracts.enums import ContractAddendumStatus, ContractStatus
 from app.modules.contracts.models import (
     Contract,
+    ContractAddendum,
     ContractItem,
     ContractItemBuilding,
     ContractItemTechnicalDevice,
@@ -106,6 +107,78 @@ def list_contract_suspensions(
             .order_by(
                 ContractSuspension.started_at.asc(),
                 ContractSuspension.id.asc(),
+            )
+        ).all()
+    )
+
+
+def get_contract_addendum(
+    db: Session,
+    contract_id: uuid.UUID,
+    addendum_id: uuid.UUID,
+    *,
+    include_deleted: bool = False,
+) -> ContractAddendum | None:
+    stmt = sa.select(ContractAddendum).where(
+        ContractAddendum.id == addendum_id,
+        ContractAddendum.contract_id == contract_id,
+    )
+    if not include_deleted:
+        stmt = stmt.where(ContractAddendum.deleted_at.is_(None))
+    return db.scalar(stmt)
+
+
+def get_contract_addendum_for_update(
+    db: Session,
+    contract_id: uuid.UUID,
+    addendum_id: uuid.UUID,
+) -> ContractAddendum | None:
+    return db.scalar(
+        sa.select(ContractAddendum)
+        .where(
+            ContractAddendum.id == addendum_id,
+            ContractAddendum.contract_id == contract_id,
+            ContractAddendum.deleted_at.is_(None),
+        )
+        .with_for_update()
+    )
+
+
+def list_contract_addenda(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> list[ContractAddendum]:
+    return list(
+        db.scalars(
+            sa.select(ContractAddendum)
+            .where(
+                ContractAddendum.contract_id == contract_id,
+                ContractAddendum.deleted_at.is_(None),
+            )
+            .order_by(
+                ContractAddendum.addendum_date.asc(),
+                ContractAddendum.created_at.asc(),
+                ContractAddendum.id.asc(),
+            )
+        ).all()
+    )
+
+
+def list_signed_contract_addenda(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> list[ContractAddendum]:
+    return list(
+        db.scalars(
+            sa.select(ContractAddendum)
+            .where(
+                ContractAddendum.contract_id == contract_id,
+                ContractAddendum.deleted_at.is_(None),
+                ContractAddendum.status == ContractAddendumStatus.SIGNED,
+            )
+            .order_by(
+                ContractAddendum.signed_at.asc().nullslast(),
+                ContractAddendum.id.asc(),
             )
         ).all()
     )
