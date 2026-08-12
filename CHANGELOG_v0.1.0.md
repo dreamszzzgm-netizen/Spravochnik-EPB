@@ -15,3 +15,6 @@
 ## Stage gate
 Stage 2 must not start until PostgreSQL migration/integration acceptance is green,
 as required by `docs/DEVELOPMENT_PLAN.md`.
+
+### Issue #3 — session investigation
+A quick investigation was performed on 2026-08-12 as part of Issue #3. Unit tests run locally: 14 passed, 8 skipped (integration tests were skipped because TEST_DATABASE_URL was not set). No code changes were required after the investigation; integration tests should be run in CI or locally with a PostgreSQL test database to fully validate migrations and DB invariants.
