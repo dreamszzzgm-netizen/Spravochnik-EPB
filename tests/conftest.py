@@ -56,7 +56,9 @@ def _ensure_migrations():
     with engine.connect() as conn:
         context = MigrationContext.configure(conn)
         current_rev = context.get_current_revision()
-        if current_rev == "0010_stage3":
+        if current_rev == "0011_stage4_contracts_core":
+            command.downgrade(alembic_cfg, "0010_stage3")
+        elif current_rev == "0010_stage3":
             command.downgrade(alembic_cfg, "0009_stage3")
     engine.dispose()
     command.upgrade(alembic_cfg, "head")
@@ -75,6 +77,8 @@ def db_session() -> Generator[Session, None, None]:
             text("""
             TRUNCATE TABLE
                 audit_events,
+                contract_item_technical_devices, contract_item_buildings,
+                contract_items, contract_responsibles, contracts,
                 custom_field_values, custom_field_definitions,
                 opo_hazard_signs, opo_activity_types, opo,
                 technical_devices,

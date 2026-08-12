@@ -4,8 +4,9 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
-from app.database.base import Base
 from app.database import models  # noqa: F401
+from app.database.base import Base
+from app.modules.contracts import models as contract_models  # noqa: F401
 from app.modules.identity import models as identity_models  # noqa: F401
 from app.modules.organizations import models as organization_models  # noqa: F401
 

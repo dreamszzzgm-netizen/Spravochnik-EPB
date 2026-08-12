@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.modules.buildings.routes import router as buildings_router
+from app.modules.contracts.routes import reference_router as contracts_reference_router
+from app.modules.contracts.routes import router as contracts_router
 from app.modules.custom_fields.routes import router as custom_fields_router
 from app.modules.identity.routes import router as identity_router
 from app.modules.opo.reference_routes import router as reference_router
@@ -31,6 +33,8 @@ app.include_router(technical_devices_router)
 app.include_router(buildings_router)
 app.include_router(custom_fields_router)
 app.include_router(reference_router)
+app.include_router(contracts_router)
+app.include_router(contracts_reference_router)
 
 
 def run() -> None:
