@@ -196,6 +196,8 @@ def test_related_scope_resolves_opo_owner_and_operator(db_session: Session) -> N
         owner_organization_id=owner.id,
         operating_organization_id=operator.id,
     )
+    db_session.add(opo)
+    db_session.flush()
     creator = _employee(db_session, "OPO Creator")
     actor_employee = _employee(db_session, "OPO Actor")
     actor = _user(db_session, actor_employee, "task-opo")
