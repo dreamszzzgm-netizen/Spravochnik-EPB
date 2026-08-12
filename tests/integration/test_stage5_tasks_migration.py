@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
+import subprocess
 
 import pytest
-from alembic.config import Config
-from alembic.runtime.migration import MigrationContext
 from sqlalchemy import create_engine, inspect, text
 
-from alembic import command
 from app.modules.comments.models import Comment, CommentTask
 from app.modules.tasks.enums import TaskPriority, TaskStatus
 from app.modules.tasks.models import Task
@@ -35,19 +32,17 @@ def _database_url() -> str:
     return os.environ["TEST_DATABASE_URL"]
 
 
-def _alembic_config(database_url: str) -> Config:
-    config = Config(str(Path(__file__).parents[2] / "alembic.ini"))
-    config.set_main_option("sqlalchemy.url", database_url)
-    return config
-
-
 def _current_revision(database_url: str) -> str | None:
     engine = create_engine(database_url)
     try:
         with engine.connect() as connection:
-            return MigrationContext.configure(connection).get_current_revision()
+            return connection.scalar(text("SELECT version_num FROM alembic_version"))
     finally:
         engine.dispose()
+
+
+def _run_alembic(*args: str) -> None:
+    subprocess.run(["alembic", *args], check=True, env=os.environ.copy())
 
 
 def test_task_enums_are_exact() -> None:
@@ -121,11 +116,10 @@ def test_stage5_postgres_enums_are_exact() -> None:
 
 def test_stage5_migration_round_trip() -> None:
     database_url = _database_url()
-    config = _alembic_config(database_url)
     assert _current_revision(database_url) == CURRENT_HEAD
 
-    command.downgrade(config, PARENT_HEAD)
+    _run_alembic("downgrade", PARENT_HEAD)
     assert _current_revision(database_url) == PARENT_HEAD
 
-    command.upgrade(config, CURRENT_HEAD)
+    _run_alembic("upgrade", CURRENT_HEAD)
     assert _current_revision(database_url) == CURRENT_HEAD
