@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
-from alembic import command
+import pytest
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
-import pytest
 from sqlalchemy import create_engine, inspect, text
 
+from alembic import command
 from app.modules.comments.models import Comment, CommentTask
 from app.modules.tasks.enums import TaskPriority, TaskStatus
 from app.modules.tasks.models import Task
@@ -28,6 +29,10 @@ EXPECTED_TABLES = {
     "comments",
     "comment_tasks",
 }
+
+
+def _database_url() -> str:
+    return os.environ["TEST_DATABASE_URL"]
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -66,8 +71,8 @@ def test_task_models_use_expected_tables() -> None:
     assert CommentTask.__tablename__ == "comment_tasks"
 
 
-def test_stage5_tables_and_indexes_exist(test_database_url: str) -> None:
-    engine = create_engine(test_database_url)
+def test_stage5_tables_and_indexes_exist() -> None:
+    engine = create_engine(_database_url())
     try:
         inspector = inspect(engine)
         assert set(inspector.get_table_names()) >= EXPECTED_TABLES
@@ -88,8 +93,8 @@ def test_stage5_tables_and_indexes_exist(test_database_url: str) -> None:
         engine.dispose()
 
 
-def test_stage5_postgres_enums_are_exact(test_database_url: str) -> None:
-    engine = create_engine(test_database_url)
+def test_stage5_postgres_enums_are_exact() -> None:
+    engine = create_engine(_database_url())
     try:
         with engine.connect() as connection:
             rows = connection.execute(
@@ -114,12 +119,13 @@ def test_stage5_postgres_enums_are_exact(test_database_url: str) -> None:
     assert grouped["task_priority"] == ["low", "normal", "high", "urgent"]
 
 
-def test_stage5_migration_round_trip(test_database_url: str) -> None:
-    config = _alembic_config(test_database_url)
-    assert _current_revision(test_database_url) == CURRENT_HEAD
+def test_stage5_migration_round_trip() -> None:
+    database_url = _database_url()
+    config = _alembic_config(database_url)
+    assert _current_revision(database_url) == CURRENT_HEAD
 
     command.downgrade(config, PARENT_HEAD)
-    assert _current_revision(test_database_url) == PARENT_HEAD
+    assert _current_revision(database_url) == PARENT_HEAD
 
     command.upgrade(config, CURRENT_HEAD)
-    assert _current_revision(test_database_url) == CURRENT_HEAD
+    assert _current_revision(database_url) == CURRENT_HEAD
