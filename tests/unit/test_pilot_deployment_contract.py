@@ -1,7 +1,6 @@
-import pathlib
+from pathlib import Path
 
-
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _read(relative: str) -> str:
