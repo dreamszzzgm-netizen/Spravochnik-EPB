@@ -3,121 +3,128 @@
 Date: 2026-08-12
 Status: Approved design
 Base checkpoint: CP4.1 Contracts Core (`fa11c71726cea0fb92ed6f1df777456ab0ab830c`)
-Target working branch: `agent/stage4-cp42-contract-lifecycle-addenda`
+Working branch: `agent/stage4-cp42-contract-lifecycle-addenda`
 
 ## 1. Goal
 
-Complete the Stage 4 contract-domain lifecycle that can be implemented safely before Tasks, Expertises and Documents are available. CP4.2 adds the contract state machine, suspension/resume records, termination/completion commands, completion readiness infrastructure, additional agreements, legal-term immutability after signing, effective amount/deadline application, authorization and audit behavior.
+Complete the Stage 4 contract-domain lifecycle that can be implemented safely before Tasks, Expertises and Documents exist. CP4.2 adds the contract state machine, suspension/resume history, termination/completion commands, completion-readiness infrastructure, additional agreements, signing-time immutability, effective amount/deadline application, authorization and audit behavior.
 
-The design intentionally avoids fake cross-module behavior. Effects that require future Tasks, Expertises, Documents or Notifications integrations are represented by narrow fail-closed integration boundaries and are completed in their owning stages.
+The design deliberately avoids fake cross-module behavior. Effects that require future Tasks, Expertises, Documents or Notifications are kept fail-closed or deferred to their owning stages.
 
 ## 2. Scope
 
 CP4.2 includes:
 
 - strict contract status transition rules;
-- explicit permission separation for ordinary status changes, termination and completion;
-- signing-time freezing of legally significant contract terms;
+- separate permissions for ordinary status changes, termination and completion;
+- validation and freezing of legally significant terms when a contract is signed;
 - one-open-suspension invariant and suspension history;
 - resume closing the current suspension;
 - termination with preserved history;
 - completion-readiness aggregation that fails closed while required providers are unavailable;
 - manual completion only after readiness succeeds;
 - additional agreements with their own lifecycle;
-- atomic application of signed addendum amount and end-date changes;
-- preservation of original contract deadline;
-- recalculation of effective contract amount from active contract items plus signed addendum deltas;
+- atomic application of signed addendum amount/deadline changes;
+- preservation of the original signed deadline;
+- effective amount recalculation from signed base items plus signed addendum deltas;
 - authorization/scope enforcement using the existing contracts access policy;
-- audit entries for accepted business commands and no audit entries for rejected commands;
-- migration, API schemas/routes, service/repository changes and tests.
+- audit entries for accepted commands and no audit entries for rejected commands;
+- migration, schemas/routes, service/repository changes and tests.
 
 ## 3. Non-goals
 
 CP4.2 does not implement:
 
-- Tasks module models, routes, deadlines or task cancellation;
-- Expertise module models or automatic work-start triggers;
-- Documents module or addendum document storage;
-- Notifications or recalculation of notification schedules;
-- frontend contract workspace migration;
+- Tasks models/routes/deadline recalculation/task cancellation;
+- Expertise models or actual producer-side automatic-start triggers;
+- Documents storage or addendum document attachment;
+- Notifications;
+- frontend contracts migration;
 - automatic contract completion;
 - a generic workflow engine;
 - generic event sourcing.
 
-Future stages must integrate through the domain boundaries defined here rather than by importing future modules into Contracts prematurely.
-
 ## 4. Architectural approach
-
-Use the existing modular-monolith contracts module and service/repository layering.
 
 `app/modules/contracts` remains the owner of:
 
 - contract statuses and transition validation;
-- contract signing rules;
-- suspension records;
+- signing rules;
+- suspensions;
 - addenda;
 - effective contract amount and deadline;
 - completion-readiness orchestration;
 - contract audit commands.
 
-Contracts must not directly import future Tasks, Expertises or Documents modules in CP4.2. Readiness and future lifecycle side effects use narrow integration ports/hooks whose unavailable state is explicit and fail-closed.
+Contracts must not directly import future Tasks, Expertises or Documents modules in CP4.2.
 
-This approach was chosen over two rejected alternatives:
+The selected approach is a lifecycle foundation with fail-closed readiness boundaries. Two alternatives were rejected:
 
-1. Deferring most lifecycle behavior until Stage 5, which would leave Stage 4 materially incomplete.
-2. Temporary success stubs for missing dependencies, which could allow invalid completion and create unsafe production behavior.
+1. Defer lifecycle behavior to Stage 5 — this would leave Stage 4 materially incomplete.
+2. Treat missing future dependencies as successful — this could allow a contract to complete without real tasks, expertises or documents.
 
 ## 5. Permission model
 
-The approved permission split is authoritative for CP4.2:
+The approved permission split is authoritative:
 
 - `contracts.change_status` — ordinary lifecycle transitions only;
 - `contracts.terminate` — termination only;
 - `contracts.complete` — completion only;
-- `contracts.manage_addenda` — addendum CRUD/status actions;
-- existing `contracts.edit`, `contracts.delete`, `contracts.restore`, `contracts.manage_items`, `contracts.manage_responsibles` keep their current meanings subject to lifecycle restrictions below.
+- `contracts.manage_addenda` — addendum CRUD/status commands;
+- existing `contracts.edit`, `contracts.delete`, `contracts.restore`, `contracts.manage_items`, `contracts.manage_responsibles` retain their current meaning subject to lifecycle restrictions below.
 
-Scope semantics remain ALL / ASSIGNED / RELATED / OWN using the existing contract access policy. Permission-name isolation remains exact: possessing one contract permission must not grant another.
+Scope semantics remain ALL / ASSIGNED / RELATED / OWN through the existing contract access policy. Exact permission-name isolation remains mandatory.
 
-For inaccessible, foreign, deleted or out-of-scope contract/addendum resources, API behavior must preserve the existing anti-enumeration contract and return the same not-found response where appropriate.
+For inaccessible, foreign, deleted or out-of-scope contract/addendum resources, nested endpoints must preserve the existing anti-enumeration behavior and return the same not-found response where applicable.
 
 ## 6. Contract state machine
 
 Allowed primary transitions:
 
-- `draft -> approval` using `contracts.change_status`;
-- `approval -> signed` using `contracts.change_status`;
-- `signed -> in_progress` only through the internal domain command `mark_work_started()`; no external manual endpoint in CP4.2;
-- `in_progress -> suspended` using `contracts.change_status` and a mandatory non-empty reason;
-- `suspended -> in_progress` using `contracts.change_status`;
-- `in_progress -> completed` only through the completion command using `contracts.complete` and only when readiness succeeds;
-- `signed -> terminated` using `contracts.terminate` and mandatory reason;
-- `in_progress -> terminated` using `contracts.terminate` and mandatory reason;
-- `suspended -> terminated` using `contracts.terminate` and mandatory reason;
-- `completed -> archived` using `contracts.change_status`;
-- `terminated -> archived` using `contracts.change_status`.
+- `draft -> approval` — `contracts.change_status`;
+- `approval -> signed` — `contracts.change_status`;
+- `signed -> in_progress` — internal `mark_work_started()` only;
+- `in_progress -> suspended` — `contracts.change_status`, mandatory reason;
+- `suspended -> in_progress` — `contracts.change_status`;
+- `in_progress -> completed` — `contracts.complete` plus successful readiness;
+- `signed -> terminated` — `contracts.terminate`, mandatory reason;
+- `in_progress -> terminated` — `contracts.terminate`, mandatory reason;
+- `suspended -> terminated` — `contracts.terminate`, mandatory reason;
+- `completed -> archived` — `contracts.change_status`;
+- `terminated -> archived` — `contracts.change_status`.
 
-All other direct transitions are rejected.
+All other direct transitions are rejected. `completed`, `terminated` and `archived` are non-reversible in v1.
 
-`completed`, `terminated` and `archived` are non-reversible in v1.
+### 6.1 Signing prerequisites
 
-### 6.1 Automatic start boundary
+`approval -> signed` is allowed only when all of the following are true:
 
-The business rule says a signed contract starts when actual work begins, for example when a linked task moves to in-progress or an expertise leaves preparation. Those producer modules do not exist yet.
+- `start_date` is present;
+- `end_date` is present;
+- date constraints are valid;
+- at least one active contract item exists;
+- at least one contract responsible exists;
+- effective amount recalculation succeeds and does not produce a negative amount.
 
-CP4.2 therefore exposes an internal service/domain command `mark_work_started(contract_id, actor/context)` that performs only `signed -> in_progress` and is not exposed as a normal public status endpoint. Stage 5/6 integrations will call it from real work-start events.
+The contract may have a zero amount because no positive-minimum rule has been approved.
 
-Creating an expertise in preparation alone must not start the contract when Stage 6 is implemented.
+On successful signing:
+
+- `original_end_date` is set from current `end_date` exactly once;
+- the active item composition and item commercial fields become the immutable signed base;
+- an audit record is written in the same transaction.
+
+### 6.2 Actual-work start boundary
+
+The business rule says a signed contract starts when actual work begins, such as a linked task moving to in-progress or an expertise leaving preparation.
+
+CP4.2 provides an internal contracts service/domain command `mark_work_started(contract_id, actor/context)` that accepts only a currently `signed` contract and performs `signed -> in_progress`. It is not exposed as a public manual status endpoint.
+
+Stage 5/6 will invoke this command from real producer events. Creating an expertise in preparation alone must not start the contract.
 
 ## 7. Legal immutability after signing
 
-Before signing, contract data can be edited according to existing edit permission and validation rules.
-
-On `approval -> signed`:
-
-- `original_end_date` is initialized from the then-current `end_date` if not already set;
-- the contract's legally significant base terms are frozen;
-- active contract items and their prices become the immutable base commercial composition for that signed contract.
+Before signing, contract data can be edited according to existing permission and validation rules.
 
 After signing, direct edits are prohibited for:
 
@@ -127,20 +134,22 @@ After signing, direct edits are prohibited for:
 - contract date;
 - start date;
 - original deadline;
-- effective end date through normal contract PATCH;
+- effective `end_date` through normal contract PATCH;
 - currency;
 - contract item membership;
-- contract item prices and other commercial item fields.
+- contract item price, expertise type, linked subject/object set and other commercial item fields.
 
-Post-signing amount or deadline changes must occur through a signed addendum.
+Post-signing amount or deadline changes occur only through signed addenda.
 
-Responsible employees may still be changed while the contract is not completed, terminated or archived. A general operational comment may be edited until archived.
+Responsible employees may be changed while the contract is `signed`, `in_progress` or `suspended`. They are frozen in `completed`, `terminated` and `archived`.
 
-Soft-delete of a contract is allowed only in `draft` or `approval`. A signed contract must proceed through lifecycle actions rather than destructive deletion.
+The operational contract comment may be edited until `archived`; it is not treated as a contractual term.
+
+Soft-delete of a contract is allowed only in `draft` or `approval`. A signed contract must use lifecycle actions rather than deletion.
 
 ## 8. Data model changes
 
-### 8.1 Contract additions
+### 8.1 Contract addition
 
 Add to `contracts`:
 
@@ -148,59 +157,77 @@ Add to `contracts`:
 
 Rules:
 
-- for pre-existing CP4.1 rows, migration may leave it null until signing;
-- on signing it is set to the current `end_date` exactly once;
-- it never changes after being set;
-- `end_date` represents the current effective contractual deadline.
+- draft/approval rows may keep it null;
+- on signing it is initialized from current `end_date` exactly once;
+- for any pre-existing row already in a post-signing status during migration, backfill it from `end_date`;
+- after initialization it never changes;
+- `end_date` is the current effective contractual deadline.
 
-No separate base-amount column is required because the signed base amount is reproducible from immutable signed contract items. `contracts.amount` remains the materialized effective amount.
+No base-amount column is needed because the signed base amount is reconstructible from immutable signed contract items. `contracts.amount` remains the materialized effective amount.
 
-### 8.2 ContractSuspension
+### 8.2 `contract_suspensions`
 
-Create `contract_suspensions`:
+Create:
 
 - `id UUID PK`;
-- `contract_id UUID FK contracts(id)`;
+- `contract_id UUID FK contracts(id) NOT NULL`;
 - `started_at TIMESTAMPTZ NOT NULL`;
 - `ended_at TIMESTAMPTZ NULL`;
 - `reason TEXT NOT NULL`;
-- `created_by UUID FK users(id)`;
+- `created_by UUID FK users(id) NOT NULL`;
 - `created_at TIMESTAMPTZ NOT NULL`.
 
-Invariant: at most one row per contract where `ended_at IS NULL`.
+Invariant: at most one row per contract with `ended_at IS NULL`.
 
-Enforce this in both service logic and a PostgreSQL partial unique index on `contract_id WHERE ended_at IS NULL`.
+Enforce the invariant both in service logic and with a PostgreSQL partial unique index on `contract_id WHERE ended_at IS NULL`.
 
-### 8.3 ContractAddendum
+### 8.3 `contract_addenda`
 
-Create `contract_addenda`:
+Create:
 
 - `id UUID PK`;
-- `contract_id UUID FK contracts(id)`;
-- `number VARCHAR(...) NOT NULL`;
+- `contract_id UUID FK contracts(id) NOT NULL`;
+- `number VARCHAR(120) NOT NULL`;
 - `addendum_date DATE NOT NULL`;
 - `status contract_addendum_status NOT NULL`;
 - `amount_delta NUMERIC(14,2) NULL`;
-- `currency VARCHAR(3) NOT NULL DEFAULT 'RUB'`;
+- `currency VARCHAR(3) NOT NULL`;
 - `new_end_date DATE NULL`;
 - `description TEXT NULL`;
 - `signed_at TIMESTAMPTZ NULL`;
-- `created_by UUID FK users(id)`;
-- `updated_by UUID FK users(id)` where consistent with current repository conventions;
-- `created_at`, `updated_at`;
+- `created_by UUID FK users(id) NOT NULL`;
+- `updated_by UUID FK users(id) NOT NULL`;
+- `created_at TIMESTAMPTZ NOT NULL`;
+- `updated_at TIMESTAMPTZ NOT NULL`;
 - `deleted_at TIMESTAMPTZ NULL`;
 - `version INTEGER NOT NULL`.
 
-Statuses:
+`contract_addendum_status` values:
 
 - `draft`;
 - `approval`;
 - `signed`;
 - `cancelled`.
 
-No `document_id` is added in CP4.2 because the Documents module does not exist yet. Stage 8 may add that nullable FK in a later migration.
+When an addendum is created, omitted currency is copied from its parent contract. No currency conversion exists in CP4.2.
 
-## 9. Addendum state machine and business rules
+No `document_id` is created in CP4.2 because the Documents module does not exist. Stage 8 may add a nullable FK later.
+
+## 9. Addendum parent-status rules
+
+An addendum may be created only for a contract in:
+
+- `signed`;
+- `in_progress`;
+- `suspended`.
+
+No new addendum may be created for `draft`, `approval`, `completed`, `terminated` or `archived` contracts.
+
+An existing draft/approval addendum may be edited or soft-deleted only while the parent contract remains `signed`, `in_progress` or `suspended`.
+
+A parent contract must still be in `signed`, `in_progress` or `suspended` when an addendum is signed. If the parent became terminal before signing, the command is rejected.
+
+## 10. Addendum state machine
 
 Allowed transitions:
 
@@ -211,110 +238,113 @@ Allowed transitions:
 
 `signed` and `cancelled` are terminal in v1.
 
-A signed addendum cannot be edited, soft-deleted or cancelled retroactively. A legal correction is represented by another addendum.
+Only `draft` and `approval` addenda may be edited or soft-deleted. `signed` and `cancelled` rows are immutable and retained as business history.
 
-An addendum may contain an amount change, an end-date change, or both. An addendum with neither has no contractual effect and must not be signable.
+A signed addendum cannot be cancelled retroactively. A correction is represented by another addendum.
+
+An addendum may contain an amount change, an end-date change, or both. An addendum with neither a non-zero `amount_delta` nor a `new_end_date` is not signable.
 
 `amount_delta` may be positive or negative, but signing must never produce a negative effective contract amount.
 
-Addendum currency must equal contract currency. CP4.2 does not implement currency conversion.
+Addendum currency must equal contract currency.
 
-If `new_end_date` is set, it must satisfy contract date constraints, including not preceding `start_date` when `start_date` exists.
+If `new_end_date` is set, it must not precede `start_date` when `start_date` exists.
 
-If the new deadline extends the current effective deadline, `description` is mandatory and serves as the recorded business reason for the extension, satisfying the established rule that contract-term increases require a reason.
+If `new_end_date` extends the current effective `end_date`, non-empty `description` is mandatory and serves as the recorded reason for the extension.
 
-### 9.1 Atomic application
+### 10.1 Atomic signing/application
 
-On `approval -> signed`, in one database transaction:
+On `approval -> signed`, one database transaction must:
 
-1. lock/reload the target contract and addendum according to current repository concurrency conventions;
-2. revalidate status, authorization, currency and resulting values;
-3. set `signed_at` once;
+1. reload/lock the target contract and addendum using the project's repository/concurrency convention;
+2. revalidate contract/addendum status, authorization, parent status, currency and resulting values;
+3. set `signed_at` exactly once;
 4. set addendum status to `signed`;
-5. if `new_end_date` exists, update `contracts.end_date` to that value;
+5. update `contracts.end_date` when `new_end_date` is present;
 6. recalculate `contracts.amount` using the authoritative formula;
 7. increment applicable versions/timestamps;
-8. write audit records;
+8. write audit entries;
 9. commit.
 
-Any failure rolls the whole transaction back. Retrying an already-signed addendum must not apply its amount or deadline effect a second time.
+Any failure rolls the entire transaction back. Retrying an already-signed addendum must not double-apply its effect.
 
-## 10. Effective amount
+## 11. Effective amount
 
-The authoritative formula is:
+Authoritative formula:
 
 `effective_amount = sum(price of active contract_items) + sum(amount_delta of active signed contract_addenda)`
 
-`contracts.amount` is a materialized value maintained by the contracts service for listing/query compatibility.
+`contracts.amount` is a materialized value maintained by one shared recalculation service path.
 
-Every operation that may affect the formula must use the same shared recalculation path:
+The same recalculation path is used by:
 
-- pre-signing item add/update/delete/restore;
+- pre-sign item add/update/delete/restore;
+- initial signing validation;
 - addendum signing;
-- any future correction operation explicitly allowed by the domain.
+- any future explicitly approved correction operation.
 
-Because contract items become immutable once the contract is signed, the original signed commercial basis remains reconstructible.
+Because item mutations are prohibited after signing, the original signed commercial basis stays reconstructible.
 
-The resulting amount must be `>= 0` and the existing contract non-negative invariant remains valid.
+The resulting amount must be `>= 0`.
 
-## 11. Deadline history and reconstruction
+## 12. Deadline history and reconstruction
 
-`original_end_date` preserves the deadline at the moment of initial contract signing.
+`original_end_date` preserves the deadline at initial signing. `contracts.end_date` stores the current effective deadline.
 
-`contracts.end_date` stores the current effective deadline.
+Every signed addendum retains `new_end_date` and `signed_at`. Deadline history is reconstructed from `original_end_date` by applying signed addenda ordered by `signed_at`, then UUID as a stable tie-breaker.
 
-Each signed addendum keeps its `new_end_date` and `signed_at`. The historical deadline can therefore be reconstructed by starting with `original_end_date` and applying signed addenda in deterministic signing order (`signed_at`, with a stable ID tie-breaker if needed).
+Signed addenda are immutable, making the chain stable.
 
-The addendum itself is immutable after signing, so this chain is stable.
+## 13. Suspension and resume
 
-## 12. Suspension and resume
-
-### 12.1 Suspend
+### 13.1 Suspend
 
 `POST /api/contracts/{id}/suspend` requires:
 
-- contract currently `in_progress`;
-- `contracts.change_status` in scope;
+- contract status `in_progress`;
+- scoped `contracts.change_status`;
 - non-empty reason;
-- no existing open suspension.
+- no open suspension.
 
-In one transaction:
+One transaction:
 
-- create `ContractSuspension(started_at=now, reason=...)`;
-- change contract status to `suspended`;
-- write audit.
+- creates `ContractSuspension(started_at=now, reason=...)`;
+- changes status to `suspended`;
+- writes audit;
+- commits.
 
-### 12.2 Resume
+### 13.2 Resume
 
 `POST /api/contracts/{id}/resume` requires:
 
-- contract currently `suspended`;
-- `contracts.change_status` in scope;
+- contract status `suspended`;
+- scoped `contracts.change_status`;
 - exactly one open suspension.
 
-In one transaction:
+One transaction:
 
-- set `ended_at=now` on the open suspension;
-- change status to `in_progress`;
-- write audit.
+- closes the open suspension with `ended_at=now`;
+- changes status to `in_progress`;
+- writes audit;
+- commits.
 
-Future Stage 5/11 integrations will use the closed suspension duration to shift unfinished task deadlines and recalculate/suppress notifications. CP4.2 does not invent task rows or notification behavior.
+The closed suspension provides the authoritative pause interval. Stage 5 and the future notifications implementation will consume that interval to shift unfinished task deadlines and recalculate/suppress notifications. CP4.2 does not create placeholder task/notification effects.
 
-## 13. Termination
+## 14. Termination
 
 `POST /api/contracts/{id}/terminate` requires:
 
-- status in `signed`, `in_progress`, `suspended`;
-- `contracts.terminate` in scope;
-- mandatory non-empty reason.
+- status `signed`, `in_progress` or `suspended`;
+- scoped `contracts.terminate`;
+- non-empty reason.
 
-The command changes the status to `terminated` and records the reason in audit metadata within the same transaction.
+The reason is persisted in audit metadata in the same transaction as the status change.
 
-If the contract is suspended, the open suspension is closed at termination time so the suspension table never retains an indefinitely open period for a terminal contract.
+If termination occurs from `suspended`, the open suspension is closed at termination time.
 
-Future Stage 5 integration must cancel unfinished linked tasks. Existing business data, future expertises, documents and history are preserved.
+Stage 5 must later add cancellation of unfinished linked tasks. Contract/expertise/document/history data is preserved.
 
-## 14. Completion readiness
+## 15. Completion readiness
 
 Completion is never automatic.
 
@@ -323,270 +353,273 @@ Expose:
 - `GET /api/contracts/{id}/completion-readiness`;
 - `POST /api/contracts/{id}/complete`.
 
-The readiness response is structured, not a single boolean only. It contains:
+Readiness response contains:
 
-- `ready_to_complete`;
-- a list of checks/providers;
-- blockers with stable machine-readable codes and user-readable detail.
+- `ready_to_complete: bool`;
+- `checks: list[CompletionCheck]`;
+- `blockers: list[CompletionBlocker]` with stable machine-readable codes and user-readable details.
 
-Minimum future providers/checks required by business rules:
+Required check keys:
 
-- mandatory expertises completed;
-- mandatory tasks done or cancelled;
-- required documents generated;
-- conclusions delivered to customer.
+- `tasks` — mandatory tasks done/cancelled;
+- `expertises` — mandatory expertises completed;
+- `documents` — required documents generated;
+- `conclusion_delivery` — conclusions delivered to customer.
 
-### 14.1 Fail-closed behavior
+### 15.1 Provider boundary
 
-Until Stage 5/6/8 providers are wired, required unavailable providers return blockers such as:
+Contracts owns a `CompletionReadinessProvider` boundary. Each provider has a stable key and returns a structured check result for one contract. The contracts service aggregates exactly the four required keys above.
+
+The application composition root supplies the provider registry. Until an owning future module supplies a real provider, that key uses an explicit unavailable provider that returns a blocker, never success.
+
+Stable unavailable blocker codes:
 
 - `tasks_provider_unavailable`;
 - `expertises_provider_unavailable`;
 - `documents_provider_unavailable`;
 - `conclusion_delivery_provider_unavailable`.
 
-Therefore `ready_to_complete=false` in normal production CP4.2 state.
+Therefore normal CP4.2 production readiness is `false` until the future modules are integrated.
 
-`POST /complete` requires `contracts.complete`, reruns readiness inside the command transaction, and rejects completion when any blocker exists. It never trusts a previously returned client-side readiness result.
+`POST /complete` requires scoped `contracts.complete`, reruns readiness server-side inside the completion command, and rejects completion if any blocker exists. It never trusts a previous client-side readiness result.
 
-This is intentional: absence of an integration must never be treated as proof of completion.
+Tests may inject deterministic satisfied providers to prove the completion transition itself works.
 
-## 15. Integration ports/hooks
+## 16. Future integration boundaries
 
-CP4.2 defines narrow contracts-owned boundaries for future modules rather than cross-importing them now.
+CP4.2 implements only boundaries needed now:
 
-Required conceptual ports:
+- inbound internal `mark_work_started()` for future Tasks/Expertises producers;
+- completion-readiness provider registry with fail-closed unavailable providers;
+- authoritative suspension intervals persisted for future deadline/notification logic.
 
-- completion readiness providers;
-- work-start trigger into `mark_work_started()`;
-- suspension/resume lifecycle hook for task deadline and notification adjustments;
-- termination hook for task cancellation.
+CP4.2 does **not** add empty no-op hooks for future task cancellation or notification recalculation. Stage 5/notifications integration will coordinate those side effects when real consumers exist. This keeps YAGNI and avoids pretending an absent side effect occurred.
 
-The exact Python shape may be Protocols/services or another project-consistent dependency mechanism chosen during implementation planning, but the behavioral contract above is fixed.
+## 17. API surface
 
-Unavailable completion providers must fail closed. Non-readiness hooks that have no future consumer yet must not pretend to execute downstream behavior.
+Existing CP4.1 contract CRUD/item/responsible endpoints remain, with lifecycle restrictions enforced in the service.
 
-## 16. API surface
+New contract command endpoints:
 
-Existing CP4.1 contract CRUD/item/responsible endpoints remain unless lifecycle restrictions make an operation invalid.
-
-New command-oriented endpoints:
-
-- `POST /api/contracts/{id}/status` for ordinary allowed status changes such as draft->approval, approval->signed and terminal->archived;
+- `POST /api/contracts/{id}/status` — ordinary allowed transitions (`draft -> approval`, `approval -> signed`, `completed|terminated -> archived`);
 - `POST /api/contracts/{id}/suspend`;
 - `POST /api/contracts/{id}/resume`;
 - `POST /api/contracts/{id}/terminate`;
 - `GET /api/contracts/{id}/completion-readiness`;
 - `POST /api/contracts/{id}/complete`.
 
-The internal `mark_work_started()` command is not exposed as a normal public endpoint in CP4.2.
+`mark_work_started()` is internal only and has no CP4.2 public route.
 
-Addenda endpoints under the owning contract:
+Addenda endpoints:
 
 - `GET /api/contracts/{id}/addenda`;
 - `POST /api/contracts/{id}/addenda`;
-- `GET /api/contracts/{id}/addenda/{addendum_id}` if consistent with current route conventions;
+- `GET /api/contracts/{id}/addenda/{addendum_id}`;
 - `PATCH /api/contracts/{id}/addenda/{addendum_id}`;
-- `DELETE /api/contracts/{id}/addenda/{addendum_id}` for allowed non-terminal soft deletion;
-- `POST /api/contracts/{id}/addenda/{addendum_id}/status` for draft->approval, approval->signed and cancellation paths.
+- `DELETE /api/contracts/{id}/addenda/{addendum_id}` for draft/approval soft deletion only;
+- `POST /api/contracts/{id}/addenda/{addendum_id}/status` for the allowed addendum transitions.
 
-Status must not be freely writable through ordinary contract/addendum PATCH schemas.
+Contract/addendum status fields are not writable through ordinary PATCH schemas.
 
-## 17. Error and transaction behavior
+## 18. Error and transaction behavior
 
 Business-rule violations use the project's existing domain/API error mapping and must not partially mutate state.
 
-Examples:
+Representative rejected cases:
 
 - invalid transition;
 - wrong dedicated permission;
+- public/manual `signed -> in_progress`;
+- signing without required dates/items/responsible;
 - status mutation through ordinary PATCH;
 - suspend without reason;
 - second open suspension;
 - resume without open suspension;
-- signed contract item mutation;
+- signed item mutation;
+- addendum on an invalid parent status;
 - invalid addendum transition;
-- signing addendum with no effect;
+- signing an effectless addendum;
 - currency mismatch;
-- negative resulting contract amount;
-- extending deadline without reason;
+- negative resulting amount;
+- invalid deadline;
+- deadline extension without reason;
 - completion with blockers.
 
 Rejected commands must:
 
-- rollback all mutations;
-- not create audit entries;
-- not increment versions merely because a rejected command was attempted.
+- roll back all mutations;
+- create no audit entry;
+- not increment versions merely because an attempt was rejected.
 
-Successful multi-record commands must commit atomically with their audit entries.
+Successful multi-record commands commit atomically with audit.
 
-## 18. Audit behavior
+## 19. Audit behavior
 
 Audit events are required for:
 
-- ordinary status transition;
-- signing;
+- ordinary contract status transition;
+- contract signing;
 - suspend;
 - resume;
 - termination including reason;
 - completion;
 - archive;
-- addendum create/update/delete where permitted;
-- addendum status transitions;
-- signed addendum application.
+- addendum create/update/delete;
+- addendum status transition;
+- signed addendum effect application.
 
-Audit metadata should record stable identifiers and relevant before/after values without duplicating sensitive payloads unnecessarily.
+Audit metadata records stable IDs and relevant before/after business values without copying unnecessary sensitive payloads.
 
-No audit record is written for a rejected command.
+Rejected commands create no audit record.
 
-## 19. Test strategy
+## 20. Test strategy
 
-Implementation follows TDD: representative RED tests are written/run before production changes, then the smallest implementation is added to make them GREEN.
+Implementation follows TDD: representative RED tests are written/run before production changes, then the smallest implementation makes them GREEN.
 
-### 19.1 Migration/model tests
+### 20.1 Migration/model tests
 
 Verify:
 
-- Alembic upgrades cleanly from `0011_stage4_contracts_core`;
-- exactly one Alembic head exists;
-- `original_end_date` exists;
-- contract suspension/addendum tables and enum exist;
-- one-open-suspension partial unique index works at DB level;
-- downgrade/upgrade behavior follows repository migration standards.
+- upgrade from `0011_stage4_contracts_core`;
+- exactly one Alembic head;
+- `original_end_date` and required backfill behavior;
+- suspension/addendum tables and enum;
+- one-open-suspension partial unique index at DB level;
+- repository-standard upgrade/downgrade behavior.
 
-### 19.2 State-machine tests
+### 20.2 State-machine and permission tests
 
-Cover every allowed transition and representative forbidden transitions.
+Cover every allowed transition plus representative forbidden transitions.
 
 Explicitly verify:
 
-- ordinary status permission cannot terminate or complete;
-- terminate permission cannot perform ordinary transitions or completion;
-- complete permission cannot terminate or perform ordinary transitions;
-- public API cannot manually do `signed -> in_progress`;
-- internal work-start command only accepts `signed`;
-- terminal statuses cannot be reopened.
+- `contracts.change_status` cannot terminate or complete;
+- `contracts.terminate` cannot do ordinary transitions or completion;
+- `contracts.complete` cannot terminate or do ordinary transitions;
+- public API cannot manually perform `signed -> in_progress`;
+- internal work-start accepts only `signed`;
+- terminal statuses cannot reopen.
 
-### 19.3 Signing and immutability tests
+### 20.3 Signing/immutability tests
 
 Verify:
 
+- signing rejects missing start/end dates, items or responsibles;
 - signing initializes `original_end_date` exactly once;
-- post-sign contract legal-field edits are rejected;
+- post-sign legal-field edits are rejected;
 - post-sign item create/update/delete/restore are rejected;
-- responsibles remain editable in allowed active statuses;
+- responsibles remain editable only in allowed active statuses;
 - signed contract cannot be soft-deleted.
 
-### 19.4 Suspension/resume tests
+### 20.4 Suspension/resume tests
 
 Verify:
 
 - suspend requires reason;
-- suspension creates open history row atomically;
-- second simultaneous/open suspension is rejected;
+- suspension creates open history atomically;
+- second open suspension is rejected;
 - DB index independently protects the invariant;
-- resume closes the open row and restores in-progress status;
-- resume without an open suspension is rejected;
+- resume closes the open row and returns to in-progress;
+- resume without open suspension is rejected;
 - termination from suspended closes the open suspension.
 
-### 19.5 Addendum tests
+### 20.5 Addendum tests
 
 Verify:
 
-- CRUD/status permission and scope isolation;
-- allowed and forbidden addendum transitions;
-- terminal addenda are immutable;
-- signed addendum cannot be deleted;
-- addendum with no contractual effect cannot be signed;
-- currency mismatch is rejected;
-- deadline extension without description/reason is rejected;
-- invalid shortened deadline is rejected;
-- signing applies amount and/or deadline atomically;
-- retrying signing cannot double-apply effects;
-- negative resulting amount is rejected and rolled back;
-- multiple signed amount deltas produce correct materialized amount;
-- multiple signed deadline changes preserve original deadline and deterministic history.
+- create/edit/delete/status permission and scope isolation;
+- parent-status rules;
+- allowed/forbidden addendum transitions;
+- terminal addenda immutable;
+- signed/cancelled addenda cannot be deleted;
+- effectless addendum cannot be signed;
+- currency mismatch rejected;
+- deadline extension without description rejected;
+- invalid shortened deadline rejected;
+- signing applies amount/deadline atomically;
+- retry cannot double-apply;
+- negative resulting amount rolls back;
+- multiple deltas produce correct materialized amount;
+- multiple deadline changes preserve original deadline and deterministic history.
 
-### 19.6 Completion-readiness tests
+### 20.6 Completion-readiness tests
 
 Verify:
 
-- unavailable mandatory providers produce stable blockers;
-- default CP4.2 readiness is false while providers are unavailable;
+- unavailable required providers produce stable blockers;
+- default CP4.2 readiness is false;
 - `contracts.complete` is independently required;
 - completion reruns readiness server-side;
-- completion with any blocker is rejected with no status/audit mutation;
-- a test composition with all readiness providers satisfied allows `in_progress -> completed`;
-- archive is allowed only from completed/terminated.
+- completion with blockers leaves status/audit unchanged;
+- injected satisfied providers allow `in_progress -> completed`;
+- archive only from completed/terminated.
 
-### 19.7 Authorization and anti-enumeration tests
+### 20.7 Authorization/anti-enumeration tests
 
-For each new endpoint, verify:
+For each new endpoint verify:
 
 - ALL/ASSIGNED/RELATED/OWN behavior through existing contract access rules;
-- wrong permission isolation;
-- foreign/out-of-scope resource indistinguishability;
+- exact permission isolation;
+- foreign/out-of-scope indistinguishability;
 - nested addendum access cannot bypass parent contract scope.
 
-### 19.8 Audit/rollback tests
+### 20.8 Audit/rollback tests
 
-Verify:
+Verify successful commands create expected audit entries; rejected transition/addendum/readiness commands create none; atomic failures leave contract/addendum/suspension state unchanged.
 
-- successful commands create expected audit entries;
-- rejected transition/addendum/readiness commands create no audit entries;
-- atomic command failures leave contract/addendum/suspension values unchanged.
+### 20.9 Regression tests
 
-### 19.9 Regression tests
+Run full backend pytest, Ruff and Alembic checks. CP4.1 behavior remains GREEN for contracts that stay in the pre-sign lifecycle.
 
-Run the full backend test suite, Ruff and Alembic checks. The CP4.1 baseline behavior must remain GREEN for contracts that remain in the draft/pre-sign lifecycle.
+## 21. Acceptance criteria
 
-## 20. Acceptance criteria
+CP4.2 is accepted only when:
 
-CP4.2 is accepted only when all of the following are true:
-
-1. Migration upgrades from CP4.1 cleanly and Alembic has one head.
-2. Contract lifecycle transitions match this specification exactly.
+1. Migration upgrades cleanly from CP4.1 and Alembic has one head.
+2. Lifecycle transitions match this spec exactly.
 3. Dedicated completion/termination permissions cannot be bypassed with `contracts.change_status`.
-4. Signed legal terms and items cannot be changed directly.
-5. At most one suspension is open for a contract, enforced in service and database.
-6. Resume/termination close suspension history correctly.
-7. Signed addenda are immutable and apply contractual effects exactly once.
-8. Effective amount equals active item total plus active signed addendum deltas and never becomes negative.
-9. Original deadline is preserved separately from effective deadline.
-10. Deadline extension through addendum requires a recorded reason.
-11. Completion remains fail-closed until all mandatory readiness providers report success.
-12. No rejected business command leaves partial state or an audit record.
-13. Authorization scopes and anti-enumeration behavior match existing contract security conventions.
-14. Full backend regression suite, Ruff and Alembic checks are GREEN.
-15. Integration branch is not merged or modified automatically; CP4.2 remains reviewable as a stacked change on CP4.1 until explicitly approved.
+4. Signing prerequisites are enforced atomically.
+5. Signed legal terms and items cannot be changed directly.
+6. At most one suspension is open, enforced in service and DB.
+7. Resume/termination close suspension history correctly.
+8. Addenda can exist only on eligible signed/active parent contracts.
+9. Signed/cancelled addenda are immutable; signed effects apply exactly once.
+10. Effective amount equals active signed-base item total plus active signed addendum deltas and never becomes negative.
+11. Original deadline is preserved separately from effective deadline.
+12. Deadline extension requires a recorded reason.
+13. Completion remains fail-closed until all four mandatory readiness providers succeed.
+14. Rejected commands leave no partial state, audit entry or spurious version increment.
+15. Authorization scopes and anti-enumeration match existing contract security conventions.
+16. Full backend regression suite, Ruff and Alembic checks are GREEN.
+17. Integration branch is not merged or modified automatically; CP4.2 remains a stacked review checkpoint until explicit user approval.
 
-## 21. Deferred integration checklist
+## 22. Deferred integration checklist
 
 Stage 5 Tasks/Workflow must add:
 
 - actual-work trigger into `mark_work_started()`;
-- task readiness provider;
-- suspension/resume deadline shifting;
-- ordinary overdue-notification suppression/recalculation where notifications exist;
-- termination cancellation of unfinished linked tasks.
+- `tasks` readiness provider;
+- suspension/resume task-deadline shifting;
+- termination cancellation of unfinished linked tasks;
+- notification-related handling when the notification subsystem exists.
 
 Stage 6 Expertises must add:
 
 - expertise actual-work trigger into `mark_work_started()` when expertise leaves preparation;
-- expertise completion readiness provider.
+- `expertises` readiness provider.
 
 Stage 8 Documents must add:
 
-- optional `contract_addenda.document_id` linkage if still desired;
-- required-documents readiness provider;
-- conclusion-delivery readiness signal/provider.
+- optional `contract_addenda.document_id` linkage if still required;
+- `documents` readiness provider;
+- `conclusion_delivery` readiness provider/signal.
 
-These future integrations must extend the CP4.2 ports rather than weaken fail-closed readiness.
+Future integrations extend these boundaries rather than weakening fail-closed readiness.
 
-## 22. Branch/PR strategy
+## 23. Branch/PR strategy
 
-CP4.2 is a stacked checkpoint based on CP4.1 head `fa11c71726cea0fb92ed6f1df777456ab0ab830c`.
+CP4.2 is stacked on CP4.1 head `fa11c71726cea0fb92ed6f1df777456ab0ab830c`.
 
 Working branch: `agent/stage4-cp42-contract-lifecycle-addenda`.
 
-During implementation/review, do not merge CP4.2 or CP4.1 into `codex/feat-gigastudio-frontend-integration` automatically. Any later PR should remain draft/review-oriented until the user explicitly requests integration.
+Do not merge CP4.2 or CP4.1 into `codex/feat-gigastudio-frontend-integration` automatically. Any CP4.2 PR stays draft/review-oriented until the user explicitly requests integration.
