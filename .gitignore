@@ -10,6 +10,9 @@ dist/
 build/
 *.egg-info/
 var/
+var/pilot/storage/
+var/pilot/backups/
+deploy/pilot/.env.pilot
 .idea/
 .vscode/
 docker-compose.override.yml
