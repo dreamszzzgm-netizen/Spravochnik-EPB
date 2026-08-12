@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
+import pytest
 from sqlalchemy import create_engine, inspect, text
 
 from app.modules.comments.models import Comment, CommentTask
@@ -70,7 +70,7 @@ def test_stage5_tables_and_indexes_exist(test_database_url: str) -> None:
     engine = create_engine(test_database_url)
     try:
         inspector = inspect(engine)
-        assert EXPECTED_TABLES <= set(inspector.get_table_names())
+        assert set(inspector.get_table_names()) >= EXPECTED_TABLES
 
         task_indexes = {item["name"] for item in inspector.get_indexes("tasks")}
         assert {
