@@ -138,7 +138,7 @@ def test_comment_service_rejects_blank_text_without_side_effects(
     task = _task(db_session, user, title="Blank comment task")
     before_comments = db_session.scalar(select(text("count(*)")).select_from(Comment))
 
-    with pytest.raises(CommentValidationError, match="текст"):
+    with pytest.raises(CommentValidationError, match="Текст"):
         CommentService().add_task_comment(
             db_session,
             actor_user_id=user.id,
