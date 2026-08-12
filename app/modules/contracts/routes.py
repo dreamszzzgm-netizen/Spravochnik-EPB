@@ -220,31 +220,6 @@ def _item_response(db: Session, item: ContractItem) -> ContractItemResponse:
     )
 
 
-def _readiness_response(contract: Contract) -> ContractCompletionReadinessResponse:
-    readiness = lifecycle_service.get_completion_readiness(
-        _readiness_response.db,
-        contract=contract,
-    )
-    return ContractCompletionReadinessResponse(
-        ready_to_complete=readiness.ready_to_complete,
-        checks=[
-            CompletionCheckResponse(
-                key=check.key,
-                passed=check.passed,
-                blockers=[
-                    CompletionBlockerResponse(code=blocker.code, detail=blocker.detail)
-                    for blocker in check.blockers
-                ],
-            )
-            for check in readiness.checks
-        ],
-        blockers=[
-            CompletionBlockerResponse(code=blocker.code, detail=blocker.detail)
-            for blocker in readiness.blockers
-        ],
-    )
-
-
 @router.get("", response_model=ContractPaginatedResponse)
 def read_contracts(
     q: str = "",
