@@ -133,6 +133,29 @@ def get_contract_responsible_ids(db: Session, contract_id: uuid.UUID) -> set[uui
     )
 
 
+def count_contract_responsibles(db: Session, contract_id: uuid.UUID) -> int:
+    return int(
+        db.scalar(
+            sa.select(sa.func.count()).select_from(ContractResponsible).where(
+                ContractResponsible.contract_id == contract_id
+            )
+        )
+        or 0
+    )
+
+
+def count_active_contract_items(db: Session, contract_id: uuid.UUID) -> int:
+    return int(
+        db.scalar(
+            sa.select(sa.func.count()).select_from(ContractItem).where(
+                ContractItem.contract_id == contract_id,
+                ContractItem.deleted_at.is_(None),
+            )
+        )
+        or 0
+    )
+
+
 def list_contract_items(
     db: Session,
     contract_id: uuid.UUID,
