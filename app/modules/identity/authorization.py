@@ -27,28 +27,19 @@ def evaluate_scopes(
             ScopeType.ALL,
         )
 
-    if (
-        ScopeType.OWN in scopes
-        and owner_user_id == user_id
-    ):
+    if ScopeType.OWN in scopes and owner_user_id == user_id:
         return AuthorizationDecision(
             True,
             ScopeType.OWN,
         )
 
-    if (
-        ScopeType.ASSIGNED in scopes
-        and user_id in (assigned_user_ids or set())
-    ):
+    if ScopeType.ASSIGNED in scopes and user_id in (assigned_user_ids or set()):
         return AuthorizationDecision(
             True,
             ScopeType.ASSIGNED,
         )
 
-    if (
-        ScopeType.RELATED in scopes
-        and user_id in (related_user_ids or set())
-    ):
+    if ScopeType.RELATED in scopes and user_id in (related_user_ids or set()):
         return AuthorizationDecision(
             True,
             ScopeType.RELATED,
@@ -76,6 +67,11 @@ class OPOLike(Protocol):
 
 class OrganizationOwnedEntityLike(Protocol):
     organization_id: uuid.UUID | None
+
+
+class ContractLike(Protocol):
+    customer_organization_id: uuid.UUID
+    created_by: uuid.UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,10 +134,7 @@ def build_authorization_context(
             active_scope_types=frozenset({ScopeType.ALL}),
         )
 
-    active_scope_types = frozenset(
-        scope_type
-        for scope_type, _scope_config in grants
-    )
+    active_scope_types = frozenset(scope_type for scope_type, _scope_config in grants)
 
     has_all_scope = ScopeType.ALL in active_scope_types
 
@@ -150,11 +143,7 @@ def build_authorization_context(
     if not has_all_scope:
         for scope_type, scope_config in grants:
             if scope_type == ScopeType.RELATED:
-                related_ids.update(
-                    _parse_related_organization_ids(
-                        scope_config
-                    )
-                )
+                related_ids.update(_parse_related_organization_ids(scope_config))
 
     return AuthorizationContext(
         user_id=user.id,
@@ -171,11 +160,7 @@ def can_access_organization(
     ctx: AuthorizationContext,
     organization: OrganizationLike,
 ) -> bool:
-    return (
-        ctx.has_all_scope
-        or organization.id
-        in ctx.related_organization_ids
-    )
+    return ctx.has_all_scope or organization.id in ctx.related_organization_ids
 
 
 def can_access_opo(
@@ -184,10 +169,8 @@ def can_access_opo(
 ) -> bool:
     return (
         ctx.has_all_scope
-        or opo.owner_organization_id
-        in ctx.related_organization_ids
-        or opo.operating_organization_id
-        in ctx.related_organization_ids
+        or opo.owner_organization_id in ctx.related_organization_ids
+        or opo.operating_organization_id in ctx.related_organization_ids
     )
 
 
@@ -195,13 +178,9 @@ def can_access_technical_device(
     ctx: AuthorizationContext,
     device: OrganizationOwnedEntityLike,
 ) -> bool:
-    return (
-        ctx.has_all_scope
-        or (
-            device.organization_id is not None
-            and device.organization_id
-            in ctx.related_organization_ids
-        )
+    return ctx.has_all_scope or (
+        device.organization_id is not None
+        and device.organization_id in ctx.related_organization_ids
     )
 
 
@@ -209,12 +188,33 @@ def can_access_building(
     ctx: AuthorizationContext,
     building: OrganizationOwnedEntityLike,
 ) -> bool:
+    return ctx.has_all_scope or (
+        building.organization_id is not None
+        and building.organization_id in ctx.related_organization_ids
+    )
+
+
+def can_access_contract(
+    ctx: AuthorizationContext,
+    contract: ContractLike,
+    *,
+    responsible_employee_ids: set[uuid.UUID],
+) -> bool:
+    if ctx.has_all_scope:
+        return True
+
     return (
-        ctx.has_all_scope
+        (
+            ScopeType.RELATED in ctx.active_scope_types
+            and contract.customer_organization_id in ctx.related_organization_ids
+        )
         or (
-            building.organization_id is not None
-            and building.organization_id
-            in ctx.related_organization_ids
+            ScopeType.ASSIGNED in ctx.active_scope_types
+            and ctx.employee_id in responsible_employee_ids
+        )
+        or (
+            ScopeType.OWN in ctx.active_scope_types
+            and contract.created_by == ctx.user_id
         )
     )
 
@@ -233,7 +233,6 @@ def can_reference_organizations(
         return True
 
     return all(
-        organization_id
-        in ctx.related_organization_ids
+        organization_id in ctx.related_organization_ids
         for organization_id in organization_ids
     )
