@@ -2,12 +2,9 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.modules.buildings.models import Building
-from app.modules.contracts.models import Contract, ContractItem
-from app.modules.opo.models import OPO
 from app.modules.tasks.enums import TaskLinkKind
 from app.modules.tasks.models import (
     Task,
@@ -19,7 +16,6 @@ from app.modules.tasks.models import (
     TaskOrganization,
     TaskTechnicalDevice,
 )
-from app.modules.technical_devices.models import TechnicalDevice
 
 
 _LINK_SPECS = (
@@ -88,67 +84,42 @@ def get_task_related_organization_ids(
     db: Session,
     task_id: uuid.UUID,
 ) -> set[uuid.UUID]:
-    organization_ids = set(
-        db.scalars(
-            select(TaskOrganization.organization_id).where(
-                TaskOrganization.task_id == task_id
-            )
-        ).all()
+    statement = text(
+        """
+        SELECT organization_id
+        FROM task_organizations
+        WHERE task_id = :task_id
+        UNION
+        SELECT c.customer_organization_id
+        FROM task_contracts tc
+        JOIN contracts c ON c.id = tc.contract_id
+        WHERE tc.task_id = :task_id
+        UNION
+        SELECT c.customer_organization_id
+        FROM task_contract_items tci
+        JOIN contract_items ci ON ci.id = tci.contract_item_id
+        JOIN contracts c ON c.id = ci.contract_id
+        WHERE tci.task_id = :task_id
+        UNION
+        SELECT td.organization_id
+        FROM task_technical_devices ttd
+        JOIN technical_devices td ON td.id = ttd.technical_device_id
+        WHERE ttd.task_id = :task_id AND td.organization_id IS NOT NULL
+        UNION
+        SELECT b.organization_id
+        FROM task_buildings tb
+        JOIN buildings b ON b.id = tb.building_id
+        WHERE tb.task_id = :task_id AND b.organization_id IS NOT NULL
+        UNION
+        SELECT o.owner_organization_id
+        FROM task_opos tor
+        JOIN opo o ON o.id = tor.opo_id
+        WHERE tor.task_id = :task_id
+        UNION
+        SELECT o.operating_organization_id
+        FROM task_opos tor
+        JOIN opo o ON o.id = tor.opo_id
+        WHERE tor.task_id = :task_id
+        """
     )
-
-    organization_ids.update(
-        db.scalars(
-            select(Contract.customer_organization_id)
-            .join(TaskContract, TaskContract.contract_id == Contract.id)
-            .where(TaskContract.task_id == task_id)
-        ).all()
-    )
-    organization_ids.update(
-        db.scalars(
-            select(Contract.customer_organization_id)
-            .join(ContractItem, ContractItem.contract_id == Contract.id)
-            .join(
-                TaskContractItem,
-                TaskContractItem.contract_item_id == ContractItem.id,
-            )
-            .where(TaskContractItem.task_id == task_id)
-        ).all()
-    )
-
-    organization_ids.update(
-        organization_id
-        for organization_id in db.scalars(
-            select(TechnicalDevice.organization_id)
-            .join(
-                TaskTechnicalDevice,
-                TaskTechnicalDevice.technical_device_id == TechnicalDevice.id,
-            )
-            .where(
-                TaskTechnicalDevice.task_id == task_id,
-                TechnicalDevice.organization_id.is_not(None),
-            )
-        ).all()
-        if organization_id is not None
-    )
-    organization_ids.update(
-        organization_id
-        for organization_id in db.scalars(
-            select(Building.organization_id)
-            .join(TaskBuilding, TaskBuilding.building_id == Building.id)
-            .where(
-                TaskBuilding.task_id == task_id,
-                Building.organization_id.is_not(None),
-            )
-        ).all()
-        if organization_id is not None
-    )
-
-    for owner_id, operator_id in db.execute(
-        select(OPO.owner_organization_id, OPO.operating_organization_id)
-        .join(TaskOPO, TaskOPO.opo_id == OPO.id)
-        .where(TaskOPO.task_id == task_id)
-    ):
-        organization_ids.add(owner_id)
-        organization_ids.add(operator_id)
-
-    return organization_ids
+    return set(db.execute(statement, {"task_id": task_id}).scalars().all())
