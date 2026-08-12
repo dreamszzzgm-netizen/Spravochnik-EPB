@@ -19,6 +19,18 @@ class ContractCreate(BaseModel):
     comment: str | None = None
 
 
+class ContractUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    customer_organization_id: uuid.UUID | None = None
+    customer_contact_id: uuid.UUID | None = None
+    number: str | None = Field(default=None, max_length=120)
+    contract_date: date | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    comment: str | None = None
+
+
 class ContractResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -66,6 +78,17 @@ class ContractItemCreate(BaseModel):
     comment: str | None = None
     technical_device_ids: list[uuid.UUID] = Field(default_factory=list)
     building_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
+class ContractItemUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, max_length=255)
+    expertise_type_id: uuid.UUID | None = None
+    price: Decimal | None = None
+    comment: str | None = None
+    technical_device_ids: list[uuid.UUID] | None = None
+    building_ids: list[uuid.UUID] | None = None
 
 
 class ContractItemResponse(BaseModel):
