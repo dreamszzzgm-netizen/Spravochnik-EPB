@@ -68,6 +68,20 @@ def get_contract(
     return db.scalar(stmt)
 
 
+def get_contract_for_update(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> Contract | None:
+    return db.scalar(
+        sa.select(Contract)
+        .where(
+            Contract.id == contract_id,
+            Contract.deleted_at.is_(None),
+        )
+        .with_for_update()
+    )
+
+
 def list_contracts_paginated(
     db: Session,
     *,
