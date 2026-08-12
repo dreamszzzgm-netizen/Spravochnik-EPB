@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import date, datetime, UTC
-from decimal import Decimal
 import uuid
+from datetime import UTC, date, datetime
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select
@@ -268,11 +268,10 @@ def test_contract_item_link_must_match_explicit_contract_link(db_session: Sessio
 
 
 def test_delete_restore_and_repository_include_deleted(db_session: Session) -> None:
-    from app.modules.tasks import repository
-    from app.modules.tasks.service import TaskService
+    from app.modules.tasks import repository, service as task_service
 
     actor, actor_employee = _make_actor(db_session, "delete-restore")
-    task = TaskService().create_task(
+    task = task_service.TaskService().create_task(
         db_session,
         actor_user_id=actor.id,
         creator_employee_id=actor_employee.id,
@@ -285,13 +284,17 @@ def test_delete_restore_and_repository_include_deleted(db_session: Session) -> N
         links=[],
     )
 
-    TaskService().delete_task(db_session, actor_user_id=actor.id, task=task)
+    task_service.TaskService().delete_task(
+        db_session, actor_user_id=actor.id, task=task
+    )
     assert repository.get_task(db_session, task.id) is None
     deleted = repository.get_task(db_session, task.id, include_deleted=True)
     assert deleted is not None
     assert deleted.deleted_at is not None
 
-    TaskService().restore_task(db_session, actor_user_id=actor.id, task=deleted)
+    task_service.TaskService().restore_task(
+        db_session, actor_user_id=actor.id, task=deleted
+    )
     restored = repository.get_task(db_session, task.id)
     assert restored is not None
     assert restored.deleted_at is None
