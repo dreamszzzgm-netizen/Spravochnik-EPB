@@ -75,7 +75,7 @@ jobs:
 
       - name: Validate Compose configuration
         run: |
-          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml config --format json > /tmp/pilot-rendered.json
+          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml --profile maintenance config --format json > /tmp/pilot-rendered.json
           python - <<'PY'
           import json
 
