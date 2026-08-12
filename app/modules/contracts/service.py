@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.buildings.models import Building
 from app.modules.contracts import repository
+from app.modules.contracts.commercial import MONEY_QUANTUM, recalculate_effective_amount
 from app.modules.contracts.enums import ContractStatus
 from app.modules.contracts.models import (
     Contract,
@@ -21,7 +22,21 @@ from app.modules.identity.models import Employee
 from app.modules.organizations.models import Organization, OrganizationContact
 from app.modules.technical_devices.models import TechnicalDevice
 
-MONEY_QUANTUM = Decimal("0.01")
+EDITABLE_TERM_STATUSES = {ContractStatus.DRAFT, ContractStatus.APPROVAL}
+COMMENT_EDITABLE_STATUSES = {
+    ContractStatus.SIGNED,
+    ContractStatus.IN_PROGRESS,
+    ContractStatus.SUSPENDED,
+    ContractStatus.COMPLETED,
+    ContractStatus.TERMINATED,
+}
+RESPONSIBLE_EDITABLE_STATUSES = {
+    ContractStatus.DRAFT,
+    ContractStatus.APPROVAL,
+    ContractStatus.SIGNED,
+    ContractStatus.IN_PROGRESS,
+    ContractStatus.SUSPENDED,
+}
 
 
 class ContractNotFoundError(Exception):
@@ -101,20 +116,40 @@ class ContractService:
         end_date: date | None,
         comment: str | None,
     ) -> Contract:
-        if contract.deleted_at is not None:
-            raise ContractNotFoundError("Договор не найден")
+        self._require_active_contract(contract)
         clean_number = self._validate_number(number)
-        self._validate_dates(start_date, end_date)
-        self._require_customer(db, customer_organization_id)
-        self._validate_contact(db, customer_organization_id, customer_contact_id)
+        clean_comment = self._clean_optional_text(comment)
 
-        contract.customer_organization_id = customer_organization_id
-        contract.customer_contact_id = customer_contact_id
-        contract.number = clean_number
-        contract.contract_date = contract_date
-        contract.start_date = start_date
-        contract.end_date = end_date
-        contract.comment = self._clean_optional_text(comment)
+        if contract.status in EDITABLE_TERM_STATUSES:
+            self._validate_dates(start_date, end_date)
+            self._require_customer(db, customer_organization_id)
+            self._validate_contact(db, customer_organization_id, customer_contact_id)
+            contract.customer_organization_id = customer_organization_id
+            contract.customer_contact_id = customer_contact_id
+            contract.number = clean_number
+            contract.contract_date = contract_date
+            contract.start_date = start_date
+            contract.end_date = end_date
+        elif contract.status in COMMENT_EDITABLE_STATUSES:
+            legal_fields_changed = any(
+                (
+                    customer_organization_id != contract.customer_organization_id,
+                    customer_contact_id != contract.customer_contact_id,
+                    clean_number != contract.number,
+                    contract_date != contract.contract_date,
+                    start_date != contract.start_date,
+                    end_date != contract.end_date,
+                )
+            )
+            if legal_fields_changed:
+                raise ContractValidationError(
+                    "Юридически значимые условия подписанного договора "
+                    "изменяются только через дополнительное соглашение"
+                )
+        else:
+            raise ContractValidationError("Архивный договор нельзя изменять")
+
+        contract.comment = clean_comment
         contract.version += 1
         try:
             db.flush()
@@ -141,8 +176,11 @@ class ContractService:
         actor_id: uuid.UUID,
         contract: Contract,
     ) -> None:
-        if contract.deleted_at is not None:
-            raise ContractNotFoundError("Договор не найден")
+        self._require_active_contract(contract)
+        if contract.status not in EDITABLE_TERM_STATUSES:
+            raise ContractValidationError(
+                "Удалить можно только договор в статусе черновика или согласования"
+            )
         contract.deleted_at = datetime.now(UTC)
         contract.version += 1
         try:
@@ -196,8 +234,12 @@ class ContractService:
         contract: Contract,
         employee_ids: Iterable[uuid.UUID],
     ) -> list[uuid.UUID]:
-        if contract.deleted_at is not None:
-            raise ContractNotFoundError("Договор не найден")
+        self._require_active_contract(contract)
+        if contract.status not in RESPONSIBLE_EDITABLE_STATUSES:
+            raise ContractValidationError(
+                "Ответственных нельзя изменять для завершённого, расторгнутого "
+                "или архивного договора"
+            )
         normalized_ids = sorted(set(employee_ids), key=str)
         self._validate_employees(db, normalized_ids)
 
@@ -242,7 +284,7 @@ class ContractService:
         building_ids: Iterable[uuid.UUID],
         comment: str | None,
     ) -> ContractItem:
-        self._require_active_contract(contract)
+        self._require_items_editable(contract)
         clean_name = self._validate_item_name(name)
         clean_price = self._normalize_money(price)
         self._require_expertise_type(db, expertise_type_id)
@@ -271,7 +313,7 @@ class ContractService:
                 delete_existing=False,
             )
             db.flush()
-            self._recalculate_amount(db, contract)
+            recalculate_effective_amount(db, contract)
             write_audit(
                 db,
                 user_id=actor_id,
@@ -303,7 +345,7 @@ class ContractService:
         building_ids: Iterable[uuid.UUID],
         comment: str | None,
     ) -> ContractItem:
-        self._require_active_contract(contract)
+        self._require_items_editable(contract)
         self._require_item_for_contract(contract, item)
         clean_name = self._validate_item_name(name)
         clean_price = self._normalize_money(price)
@@ -328,7 +370,7 @@ class ContractService:
                 delete_existing=True,
             )
             db.flush()
-            self._recalculate_amount(db, contract)
+            recalculate_effective_amount(db, contract)
             write_audit(
                 db,
                 user_id=actor_id,
@@ -354,13 +396,13 @@ class ContractService:
         contract: Contract,
         item: ContractItem,
     ) -> None:
-        self._require_active_contract(contract)
+        self._require_items_editable(contract)
         self._require_item_for_contract(contract, item)
         item.deleted_at = datetime.now(UTC)
         item.version += 1
         try:
             db.flush()
-            self._recalculate_amount(db, contract)
+            recalculate_effective_amount(db, contract)
             write_audit(
                 db,
                 user_id=actor_id,
@@ -466,6 +508,14 @@ class ContractService:
         if contract.deleted_at is not None:
             raise ContractNotFoundError("Договор не найден")
 
+    @classmethod
+    def _require_items_editable(cls, contract: Contract) -> None:
+        cls._require_active_contract(contract)
+        if contract.status not in EDITABLE_TERM_STATUSES:
+            raise ContractValidationError(
+                "Предметы подписанного договора нельзя изменять"
+            )
+
     @staticmethod
     def _require_item_for_contract(contract: Contract, item: ContractItem) -> None:
         if item.deleted_at is not None or item.contract_id != contract.id:
@@ -546,16 +596,3 @@ class ContractService:
                 for building_id in building_ids
             ]
         )
-
-    @staticmethod
-    def _recalculate_amount(db: Session, contract: Contract) -> None:
-        total = db.scalar(
-            sa.select(
-                sa.func.coalesce(sa.func.sum(ContractItem.price), Decimal("0.00"))
-            ).where(
-                ContractItem.contract_id == contract.id,
-                ContractItem.deleted_at.is_(None),
-            )
-        )
-        contract.amount = Decimal(total or 0).quantize(MONEY_QUANTUM)
-        db.flush()
