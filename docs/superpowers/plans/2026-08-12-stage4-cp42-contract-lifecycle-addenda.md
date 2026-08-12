@@ -4,7 +4,7 @@
 
 **Goal:** Implement the approved CP4.2 contract lifecycle, suspension history, fail-closed completion readiness, post-signing immutability, and additional agreements without prematurely implementing Tasks, Expertises, Documents, or Notifications.
 
-**Architecture:** Keep `app/modules/contracts` as the domain owner and preserve the existing CP4.1 CRUD/API contracts. Add focused lifecycle, commercial calculation, and readiness modules around the existing repository/service layer; persist suspensions and addenda in one Alembic migration. Cross-module completion checks use explicit fail-closed providers, while future work-start producers call an internal contracts command rather than a public manual endpoint.
+**Architecture:** Keep `app/modules/contracts` as the domain owner and preserve the existing CP4.1 CRUD/API contracts. Add focused lifecycle, commercial-calculation, readiness, and addenda services around the existing repository/service layer; persist suspensions and addenda in one Alembic migration. Future Tasks/Expertises/Documents integrations connect through the approved internal work-start command and readiness provider boundary instead of direct imports into Contracts.
 
 **Tech Stack:** Python 3.14, FastAPI, SQLAlchemy 2.x ORM, PostgreSQL, Alembic, Pydantic v2, pytest, existing identity authorization/audit infrastructure.
 
@@ -12,49 +12,51 @@
 
 - Working branch: `agent/stage4-cp42-contract-lifecycle-addenda`, based on CP4.1 checkpoint `fa11c71726cea0fb92ed6f1df777456ab0ab830c`.
 - Do not merge, rebase, or fast-forward `codex/feat-gigastudio-frontend-integration` during this checkpoint.
-- New Alembic revision must be the single child of `0011_stage4_contracts_core` and leave exactly one migration head.
+- New Alembic revision is the single child of `0011_stage4_contracts_core` and must leave exactly one migration head.
 - `contracts.change_status` controls ordinary transitions; `contracts.terminate` controls termination; `contracts.complete` controls completion; `contracts.manage_addenda` controls addendum mutations.
-- `signed -> in_progress` is internal `mark_work_started()` only; no CP4.2 public manual endpoint may expose this transition.
+- `signed -> in_progress` is internal `mark_work_started()` only; no public CP4.2 endpoint exposes that transition.
 - Completion is manual and fail-closed. Missing Tasks/Expertises/Documents/conclusion-delivery providers are blockers, never success.
 - Signed contract items and legally significant base terms are immutable; price/deadline changes after signing happen only through signed addenda.
 - At most one open `contract_suspensions` row may exist per contract; enforce in service logic and PostgreSQL.
 - Signed/cancelled addenda are immutable. Signed addenda cannot be retroactively cancelled or deleted.
-- Effective amount is `active item total + active signed addendum deltas`; resulting amount must never be negative.
+- Effective amount is `active item total + active signed addendum deltas`; the result must never be negative.
 - `original_end_date` is initialized once on signing and never changes; `end_date` is the current effective deadline.
-- Rejected business commands must rollback completely, create no success audit event, and not increment versions merely because an invalid command was attempted.
+- Rejected commands rollback completely, create no success audit event, and do not increment versions merely because validation was attempted.
 - Preserve existing 404 anti-enumeration behavior for foreign, inaccessible, deleted, or nested out-of-scope resources.
-- Do not add Tasks, Expertises, Documents, Notifications, generic workflow engine, generic event sourcing, or frontend work in CP4.2.
+- Do not add Tasks, Expertises, Documents, Notifications, a generic workflow engine, generic event sourcing, or frontend work in CP4.2.
 
 ---
 
 ## Planned File Structure
 
 **Create:**
-- `alembic/versions/0012_stage4_contract_lifecycle_addenda.py` — schema changes, addendum enum, suspension/addenda tables, open-suspension partial unique index.
-- `app/modules/contracts/commercial.py` — one authoritative effective-amount calculation/recalculation path shared by item CRUD and addendum signing.
-- `app/modules/contracts/lifecycle.py` — ordinary transition map plus `ContractLifecycleService` for signing, work-start, suspension/resume, termination, readiness, and completion.
-- `app/modules/contracts/readiness.py` — readiness result types, provider Protocol, explicit unavailable providers, and registry/aggregation helpers.
-- `app/modules/contracts/addenda.py` — `ContractAddendumService` for addendum CRUD/lifecycle and atomic signed effects.
-- `tests/integration/test_stage4_cp42_migration.py` — migration/table/index/enum assertions.
-- `tests/integration/test_contract_lifecycle.py` — service-level signing, transition, immutability, suspension, termination tests.
-- `tests/integration/test_contract_addenda.py` — service-level addendum lifecycle/effects/rollback/idempotency tests.
-- `tests/integration/test_contract_completion.py` — readiness aggregation/fail-closed/manual completion tests.
-- `tests/integration/test_contract_lifecycle_api.py` — API commands, dedicated permissions, anti-enumeration, status PATCH rejection.
+- `alembic/versions/0012_stage4_contract_lifecycle_addenda.py` — schema changes, addendum enum, suspension/addenda tables, partial unique index.
+- `app/modules/contracts/commercial.py` — authoritative effective-amount calculation/recalculation.
+- `app/modules/contracts/lifecycle.py` — transition map and lifecycle commands.
+- `app/modules/contracts/readiness.py` — readiness result types, provider Protocol, unavailable providers, aggregation.
+- `app/modules/contracts/addenda.py` — addendum CRUD/lifecycle and signed commercial effects.
+- `tests/integration/test_stage4_cp42_migration.py` — migration/table/index/enum checks.
+- `tests/integration/test_contract_lifecycle.py` — lifecycle, immutability, suspension, termination service tests.
+- `tests/integration/test_contract_addenda.py` — addendum lifecycle/effects/rollback/idempotency tests.
+- `tests/integration/test_contract_completion.py` — fail-closed readiness/manual completion tests.
+- `tests/integration/test_contract_lifecycle_api.py` — API, dedicated permissions, anti-enumeration tests.
 
 **Modify:**
-- `app/modules/contracts/enums.py` — add `ContractAddendumStatus`.
-- `app/modules/contracts/models.py` — add `original_end_date`, `ContractSuspension`, `ContractAddendum`.
-- `app/modules/contracts/repository.py` — add locking/query/count helpers for lifecycle/addenda/readiness.
-- `app/modules/contracts/service.py` — keep CP4.1 CRUD signatures; add lifecycle guards and use shared commercial recalculation.
-- `app/modules/contracts/schemas.py` — add lifecycle/readiness/addendum request/response schemas and `original_end_date` to contract response.
-- `app/modules/contracts/routes.py` — command routes and nested addenda routes using existing scope checks.
-- `tests/integration/test_contracts_core.py` — preserve CP4.1 regression coverage and adapt only assertions affected by `original_end_date`/shared amount helper.
-- `PROJECT_STATUS.md` — mark CP4.2 complete only after full verification.
-- `docs/BUSINESS_RULES.md`, `docs/DATA_MODEL.md`, `docs/PERMISSIONS.md` — resolve CP4.2 implementation details to match the approved spec where current wording conflicts.
+- `app/modules/contracts/enums.py`
+- `app/modules/contracts/models.py`
+- `app/modules/contracts/repository.py`
+- `app/modules/contracts/service.py`
+- `app/modules/contracts/schemas.py`
+- `app/modules/contracts/routes.py`
+- `tests/integration/test_contracts_core.py`
+- `PROJECT_STATUS.md`
+- `docs/BUSINESS_RULES.md`
+- `docs/DATA_MODEL.md`
+- `docs/PERMISSIONS.md`
 
 ---
 
-### Task 1: Persist CP4.2 lifecycle and addenda data model
+### Task 1: Persist the CP4.2 data model
 
 **Files:**
 - Create: `alembic/versions/0012_stage4_contract_lifecycle_addenda.py`
@@ -63,13 +65,14 @@
 - Create: `tests/integration/test_stage4_cp42_migration.py`
 
 **Interfaces:**
-- Produces: `ContractAddendumStatus`, `Contract.original_end_date`, `ContractSuspension`, `ContractAddendum`.
-- Produces DB enum `contract_addendum_status`, tables `contract_suspensions`, `contract_addenda`, and unique partial index `uq_contract_suspensions_one_open`.
-- Consumed by Tasks 3–7.
+- Produces `ContractAddendumStatus` with values `draft`, `approval`, `signed`, `cancelled`.
+- Produces `Contract.original_end_date`.
+- Produces ORM classes `ContractSuspension` and `ContractAddendum`.
+- Produces DB enum `contract_addendum_status`, tables `contract_suspensions`, `contract_addenda`, and partial unique index `uq_contract_suspensions_one_open`.
 
-- [ ] **Step 1: Write failing migration/model tests**
+- [ ] **Step 1: Write the failing model/migration tests**
 
-Create `tests/integration/test_stage4_cp42_migration.py` with concrete checks:
+Create this initial test file:
 
 ```python
 import sqlalchemy as sa
@@ -79,12 +82,15 @@ from app.modules.contracts.enums import ContractAddendumStatus
 from app.modules.contracts.models import Contract, ContractAddendum, ContractSuspension
 
 
-def test_cp42_models_expose_expected_fields() -> None:
+def test_cp42_models_expose_expected_contract_fields() -> None:
     assert hasattr(Contract, "original_end_date")
     assert ContractSuspension.__tablename__ == "contract_suspensions"
     assert ContractAddendum.__tablename__ == "contract_addenda"
     assert [status.value for status in ContractAddendumStatus] == [
-        "draft", "approval", "signed", "cancelled"
+        "draft",
+        "approval",
+        "signed",
+        "cancelled",
     ]
 
 
@@ -92,23 +98,23 @@ def test_cp42_database_objects_exist(db_session: Session) -> None:
     inspector = sa.inspect(db_session.get_bind())
     assert "contract_suspensions" in inspector.get_table_names()
     assert "contract_addenda" in inspector.get_table_names()
-    suspension_indexes = {row["name"] for row in inspector.get_indexes("contract_suspensions")}
-    assert "uq_contract_suspensions_one_open" in suspension_indexes
+    index_names = {
+        index["name"] for index in inspector.get_indexes("contract_suspensions")
+    }
+    assert "uq_contract_suspensions_one_open" in index_names
 ```
 
-- [ ] **Step 2: Run the focused tests and verify RED**
-
-Run:
+- [ ] **Step 2: Run the focused test and verify RED**
 
 ```powershell
 python -m pytest -q tests/integration/test_stage4_cp42_migration.py
 ```
 
-Expected: collection/import or assertion failure because CP4.2 enum/models/migration do not exist yet.
+Expected: import/assertion failure because CP4.2 enum/models do not exist yet.
 
-- [ ] **Step 3: Add enum and ORM models**
+- [ ] **Step 3: Add the enum and exact ORM fields**
 
-In `app/modules/contracts/enums.py` add:
+In `enums.py` add:
 
 ```python
 class ContractAddendumStatus(enum.StrEnum):
@@ -118,18 +124,46 @@ class ContractAddendumStatus(enum.StrEnum):
     CANCELLED = "cancelled"
 ```
 
-In `app/modules/contracts/models.py` add `original_end_date: Mapped[date | None]` to `Contract` and implement the two approved models with UUID PKs, timestamps, actor FKs, soft delete/version on addenda, and `Enum(ContractAddendumStatus, name="contract_addendum_status", values_callable=enum_values)`.
-
-- [ ] **Step 4: Add Alembic revision `0012_stage4_contract_lifecycle_addenda`**
-
-The migration must have:
+In `models.py`, add this field to `Contract`:
 
 ```python
-revision = "0012_stage4_contract_lifecycle_addenda"
-down_revision = "0011_stage4_contracts_core"
+original_end_date: Mapped[date | None] = mapped_column(Date)
 ```
 
-Create `contract_addendum_status`, add `contracts.original_end_date`, create both tables, and create:
+Add `ContractSuspension` with columns `id`, `contract_id`, `started_at`, `ended_at`, `reason`, `created_by`, `created_at`.
+
+Add `ContractAddendum` with columns `id`, `contract_id`, `number`, `addendum_date`, `status`, `amount_delta`, `currency`, `new_end_date`, `description`, `signed_at`, `created_by`, `updated_by`, `created_at`, `updated_at`, `deleted_at`, `version`.
+
+Use the existing project enum helper:
+
+```python
+status: Mapped[ContractAddendumStatus] = mapped_column(
+    Enum(
+        ContractAddendumStatus,
+        name="contract_addendum_status",
+        values_callable=enum_values,
+    ),
+    nullable=False,
+    default=ContractAddendumStatus.DRAFT,
+    index=True,
+)
+```
+
+- [ ] **Step 4: Create Alembic revision `0012_stage4_contract_lifecycle_addenda`**
+
+Use this exact revision linkage:
+
+```python
+revision: str = "0012_stage4_contract_lifecycle_addenda"
+down_revision: str | Sequence[str] | None = "0011_stage4_contracts_core"
+```
+
+The migration must:
+1. create PostgreSQL enum `contract_addendum_status`;
+2. add nullable `contracts.original_end_date`;
+3. backfill `original_end_date = end_date` for existing statuses `signed`, `in_progress`, `suspended`, `completed`, `terminated`, `archived`;
+4. create `contract_suspensions` with FKs to `contracts` and `users`;
+5. create this partial unique index:
 
 ```python
 op.create_index(
@@ -141,11 +175,10 @@ op.create_index(
 )
 ```
 
-Backfill `original_end_date = end_date` only for rows already in `signed`, `in_progress`, `suspended`, `completed`, `terminated`, or `archived`; draft/approval rows remain null.
+6. create `contract_addenda` with FKs to `contracts` and `users` and indexes for `contract_id`, `status`, `deleted_at`;
+7. downgrade in reverse order and drop the addendum enum after dropping its table.
 
-- [ ] **Step 5: Verify migration/model GREEN**
-
-Run:
+- [ ] **Step 5: Verify migration GREEN and single head**
 
 ```powershell
 python -m pytest -q tests/integration/test_stage4_cp42_migration.py tests/integration/test_migration.py
@@ -153,9 +186,9 @@ alembic heads
 alembic upgrade head
 ```
 
-Expected: tests PASS and exactly one head: `0012_stage4_contract_lifecycle_addenda`.
+Expected: tests PASS; `alembic heads` prints only `0012_stage4_contract_lifecycle_addenda`.
 
-- [ ] **Step 6: Commit the data-model slice**
+- [ ] **Step 6: Commit Task 1**
 
 ```powershell
 git add alembic/versions/0012_stage4_contract_lifecycle_addenda.py app/modules/contracts/enums.py app/modules/contracts/models.py tests/integration/test_stage4_cp42_migration.py
@@ -164,7 +197,7 @@ git commit -m "feat: add contract lifecycle and addenda data model"
 
 ---
 
-### Task 2: Centralize effective contract amount and post-signing CRUD guards
+### Task 2: Centralize commercial calculation and enforce post-signing CRUD guards
 
 **Files:**
 - Create: `app/modules/contracts/commercial.py`
@@ -174,42 +207,74 @@ git commit -m "feat: add contract lifecycle and addenda data model"
 - Create: `tests/integration/test_contract_lifecycle.py`
 
 **Interfaces:**
-- Produces: `calculate_effective_amount(db: Session, contract_id: UUID, *, pending_delta: Decimal = Decimal("0.00")) -> Decimal`.
-- Produces: `recalculate_effective_amount(db: Session, contract: Contract) -> Decimal`.
+- Produces `calculate_effective_amount(db, contract_id, pending_delta=Decimal("0.00")) -> Decimal`.
+- Produces `recalculate_effective_amount(db, contract) -> Decimal`.
 - Produces repository helpers `count_active_contract_items()` and `count_contract_responsibles()`.
-- Existing `ContractService.create_contract/update_contract/delete_contract/restore_contract/replace_responsibles/create_item/update_item/delete_item` signatures remain unchanged.
+- Existing CP4.1 `ContractService` public method signatures remain unchanged.
 
-- [ ] **Step 1: Add RED tests for lifecycle guards and shared amount calculation**
+- [ ] **Step 1: Write RED guard tests**
 
-Add service tests proving:
+Create `test_contract_lifecycle.py` using the existing CP4.1 fixture style. Add these named tests:
+- `test_signed_contract_rejects_item_create_update_delete`;
+- `test_signed_contract_rejects_legal_term_changes_but_allows_comment_change`;
+- `test_contract_delete_allowed_only_draft_or_approval`;
+- `test_responsibles_frozen_only_in_terminal_statuses`.
+
+For the item guard, use a valid existing item and assert the service rejects the mutation before audit/state change:
 
 ```python
+before_version = item.version
+before_amount = contract.amount
+before_audit = _audit_count(db_session, "contract_item.updated")
 contract.status = ContractStatus.SIGNED
-with pytest.raises(ContractValidationError, match="подписан"):
-    service.create_item(...)
-with pytest.raises(ContractValidationError, match="подписан"):
-    service.update_item(...)
-with pytest.raises(ContractValidationError, match="подписан"):
-    service.delete_item(...)
-with pytest.raises(ContractValidationError, match="нельзя удалить"):
-    service.delete_contract(db_session, actor_id=actor_id, contract=contract)
+db_session.commit()
+
+with pytest.raises(ContractValidationError):
+    service.update_item(
+        db_session,
+        actor_id=actor_id,
+        contract=contract,
+        item=item,
+        name=item.name,
+        expertise_type_id=item.expertise_type_id,
+        price=Decimal("200.00"),
+        technical_device_ids=[device.id],
+        building_ids=[],
+        comment=item.comment,
+    )
+
+db_session.refresh(item)
+db_session.refresh(contract)
+assert item.version == before_version
+assert contract.amount == before_amount
+assert _audit_count(db_session, "contract_item.updated") == before_audit
 ```
 
-Also prove `replace_responsibles()` succeeds for `SIGNED/IN_PROGRESS/SUSPENDED` and fails for `COMPLETED/TERMINATED/ARCHIVED`.
-
-- [ ] **Step 2: Run focused RED tests**
+- [ ] **Step 2: Run RED guard tests**
 
 ```powershell
-python -m pytest -q tests/integration/test_contracts_core.py tests/integration/test_contract_lifecycle.py
+python -m pytest -q tests/integration/test_contract_lifecycle.py tests/integration/test_contracts_core.py
 ```
 
-Expected: new lifecycle assertions fail because CP4.1 only checks soft deletion.
+Expected: new guard tests fail because CP4.1 only checks deletion state.
 
-- [ ] **Step 3: Implement `commercial.py`**
+- [ ] **Step 3: Implement the shared commercial calculator**
 
-Use one query path:
+Create `commercial.py` with this implementation shape:
 
 ```python
+import uuid
+from decimal import Decimal
+
+import sqlalchemy as sa
+from sqlalchemy.orm import Session
+
+from app.modules.contracts.enums import ContractAddendumStatus
+from app.modules.contracts.models import Contract, ContractAddendum, ContractItem
+
+MONEY_QUANTUM = Decimal("0.01")
+
+
 def calculate_effective_amount(
     db: Session,
     contract_id: uuid.UUID,
@@ -217,19 +282,30 @@ def calculate_effective_amount(
     pending_delta: Decimal = Decimal("0.00"),
 ) -> Decimal:
     item_total = db.scalar(
-        sa.select(sa.func.coalesce(sa.func.sum(ContractItem.price), Decimal("0.00"))).where(
+        sa.select(
+            sa.func.coalesce(sa.func.sum(ContractItem.price), Decimal("0.00"))
+        ).where(
             ContractItem.contract_id == contract_id,
             ContractItem.deleted_at.is_(None),
         )
     )
     signed_delta_total = db.scalar(
-        sa.select(sa.func.coalesce(sa.func.sum(ContractAddendum.amount_delta), Decimal("0.00"))).where(
+        sa.select(
+            sa.func.coalesce(
+                sa.func.sum(ContractAddendum.amount_delta),
+                Decimal("0.00"),
+            )
+        ).where(
             ContractAddendum.contract_id == contract_id,
             ContractAddendum.deleted_at.is_(None),
             ContractAddendum.status == ContractAddendumStatus.SIGNED,
         )
     )
-    return (Decimal(item_total or 0) + Decimal(signed_delta_total or 0) + pending_delta).quantize(MONEY_QUANTUM)
+    return (
+        Decimal(item_total or 0)
+        + Decimal(signed_delta_total or 0)
+        + pending_delta
+    ).quantize(MONEY_QUANTUM)
 
 
 def recalculate_effective_amount(db: Session, contract: Contract) -> Decimal:
@@ -239,35 +315,68 @@ def recalculate_effective_amount(db: Session, contract: Contract) -> Decimal:
     return amount
 ```
 
-- [ ] **Step 4: Apply exact lifecycle guards to CP4.1 mutations**
+- [ ] **Step 4: Replace the CP4.1 private amount summation**
 
-Rules:
-- full contract term edits only in `draft` or `approval`;
-- in `signed/in_progress/suspended`, `update_contract()` may change only `comment`; routes will pass existing legal fields unchanged and service will reject any actual legal-field difference;
-- item create/update/delete only in `draft` or `approval`;
-- contract soft-delete only in `draft` or `approval`;
-- responsibles mutable through `signed/in_progress/suspended`, frozen in terminal statuses.
+In `ContractService.create_item`, `update_item`, and `delete_item`, replace calls to `_recalculate_amount()` with `recalculate_effective_amount()`. Remove `_recalculate_amount()` after all call sites are replaced.
 
-Replace the private CP4.1 amount summation with `recalculate_effective_amount()`.
+- [ ] **Step 5: Add exact service lifecycle guards**
 
-- [ ] **Step 5: Add repository count helpers used by signing**
+Implement helper predicates/constants in `service.py`:
 
 ```python
-def count_active_contract_items(db: Session, contract_id: uuid.UUID) -> int: ...
-def count_contract_responsibles(db: Session, contract_id: uuid.UUID) -> int: ...
+EDITABLE_TERM_STATUSES = {ContractStatus.DRAFT, ContractStatus.APPROVAL}
+RESPONSIBLE_EDITABLE_STATUSES = {
+    ContractStatus.DRAFT,
+    ContractStatus.APPROVAL,
+    ContractStatus.SIGNED,
+    ContractStatus.IN_PROGRESS,
+    ContractStatus.SUSPENDED,
+}
 ```
 
-Both use `SELECT count(*)` and no side effects.
+Rules enforced in service methods:
+- `update_contract`: full legal-field changes only for `draft/approval`; for `signed/in_progress/suspended`, reject if any legal field differs and allow only `comment` difference; reject all changes in terminal statuses except no-op reads never reach the service;
+- `create_item/update_item/delete_item`: only `draft/approval`;
+- `delete_contract`: only `draft/approval`;
+- `replace_responsibles`: only statuses in `RESPONSIBLE_EDITABLE_STATUSES`.
 
-- [ ] **Step 6: Verify GREEN and CP4.1 regression**
+- [ ] **Step 6: Add repository count helpers**
+
+Use exact side-effect-free queries:
+
+```python
+def count_active_contract_items(db: Session, contract_id: uuid.UUID) -> int:
+    return int(
+        db.scalar(
+            sa.select(sa.func.count()).select_from(ContractItem).where(
+                ContractItem.contract_id == contract_id,
+                ContractItem.deleted_at.is_(None),
+            )
+        )
+        or 0
+    )
+
+
+def count_contract_responsibles(db: Session, contract_id: uuid.UUID) -> int:
+    return int(
+        db.scalar(
+            sa.select(sa.func.count()).select_from(ContractResponsible).where(
+                ContractResponsible.contract_id == contract_id
+            )
+        )
+        or 0
+    )
+```
+
+- [ ] **Step 7: Verify GREEN and CP4.1 regression**
 
 ```powershell
-python -m pytest -q tests/integration/test_contracts_core.py tests/integration/test_contracts_api_mutations.py tests/integration/test_contract_lifecycle.py
+python -m pytest -q tests/integration/test_contract_lifecycle.py tests/integration/test_contracts_core.py tests/integration/test_contracts_api_mutations.py
 ```
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit Task 2**
 
 ```powershell
 git add app/modules/contracts/commercial.py app/modules/contracts/service.py app/modules/contracts/repository.py tests/integration/test_contracts_core.py tests/integration/test_contract_lifecycle.py
@@ -284,90 +393,87 @@ git commit -m "feat: enforce signed contract immutability"
 - Modify: `tests/integration/test_contract_lifecycle.py`
 
 **Interfaces:**
-- Produces `ContractLifecycleService.change_status(db, *, actor_id, contract, target_status) -> Contract`.
-- Produces `ContractLifecycleService.mark_work_started(db, *, actor_id, contract) -> Contract`.
-- Ordinary public transition set is exactly `draft->approval`, `approval->signed`, `completed->archived`, `terminated->archived`.
+- Produces `ContractLifecycleService.change_status()`.
+- Produces internal `ContractLifecycleService.mark_work_started()`.
+- Ordinary transition set is exactly `draft->approval`, `approval->signed`, `completed->archived`, `terminated->archived`.
 
-- [ ] **Step 1: Write RED tests for signing prerequisites and transition matrix**
+- [ ] **Step 1: Write RED transition tests**
 
-Tests must cover:
+Add these named tests:
+- `test_ordinary_transition_matrix_accepts_only_approved_pairs`;
+- `test_signing_requires_start_date`;
+- `test_signing_requires_end_date`;
+- `test_signing_requires_active_item`;
+- `test_signing_requires_responsible`;
+- `test_signing_sets_original_end_date_once`;
+- `test_manual_status_change_cannot_start_signed_contract`;
+- `test_mark_work_started_accepts_only_signed_contract`.
+
+Use this transition matrix in the first test:
 
 ```python
-@pytest.mark.parametrize(
-    ("source", "target"),
-    [
-        (ContractStatus.DRAFT, ContractStatus.APPROVAL),
-        (ContractStatus.APPROVAL, ContractStatus.SIGNED),
-        (ContractStatus.COMPLETED, ContractStatus.ARCHIVED),
-        (ContractStatus.TERMINATED, ContractStatus.ARCHIVED),
-    ],
-)
-def test_allowed_ordinary_transitions(...): ...
+allowed = {
+    (ContractStatus.DRAFT, ContractStatus.APPROVAL),
+    (ContractStatus.APPROVAL, ContractStatus.SIGNED),
+    (ContractStatus.COMPLETED, ContractStatus.ARCHIVED),
+    (ContractStatus.TERMINATED, ContractStatus.ARCHIVED),
+}
 ```
 
-And reject examples `draft->signed`, `approval->in_progress`, `signed->in_progress` through `change_status`, `archived->draft`.
+Explicit rejected pairs are `draft->signed`, `approval->in_progress`, `signed->in_progress` through `change_status`, and `archived->draft`.
 
-Signing tests must independently reject missing `start_date`, missing `end_date`, zero active items, and zero responsibles with no audit/status/version mutation. A valid signing must set `original_end_date == end_date` exactly once.
-
-- [ ] **Step 2: Run RED tests**
+- [ ] **Step 2: Run transition tests and verify RED**
 
 ```powershell
 python -m pytest -q tests/integration/test_contract_lifecycle.py -k "transition or signing or work_started"
 ```
 
-Expected: FAIL because lifecycle service does not exist.
+Expected: import failure for `ContractLifecycleService` or failing assertions.
 
-- [ ] **Step 3: Implement transition constants and service**
+- [ ] **Step 3: Implement transition map and service signatures**
 
-In `lifecycle.py`:
+Create `lifecycle.py` with:
 
 ```python
-ORDINARY_TRANSITIONS = {
+ORDINARY_TRANSITIONS: dict[ContractStatus, set[ContractStatus]] = {
     ContractStatus.DRAFT: {ContractStatus.APPROVAL},
     ContractStatus.APPROVAL: {ContractStatus.SIGNED},
     ContractStatus.COMPLETED: {ContractStatus.ARCHIVED},
     ContractStatus.TERMINATED: {ContractStatus.ARCHIVED},
 }
-
-class ContractLifecycleService:
-    def change_status(
-        self,
-        db: Session,
-        *,
-        actor_id: uuid.UUID,
-        contract: Contract,
-        target_status: ContractStatus,
-    ) -> Contract: ...
-
-    def mark_work_started(
-        self,
-        db: Session,
-        *,
-        actor_id: uuid.UUID,
-        contract: Contract,
-    ) -> Contract: ...
 ```
 
-For `approval->signed`, check start/end dates, active items, responsibles, current effective amount, then set `original_end_date` only when null. Audit accepted transitions with `contract.status_changed`; audit internal start with `contract.work_started`.
+`ContractLifecycleService.change_status()` must:
+1. reject deleted contracts;
+2. verify `(current, target)` is allowed;
+3. for `approval->signed`, require non-null start/end dates, at least one active item, at least one responsible, and non-negative effective amount;
+4. set `original_end_date = end_date` only when entering `signed` and only when currently null;
+5. increment `contract.version` once;
+6. write `contract.status_changed` with metadata `{"from": old.value, "to": target.value}`;
+7. commit/refresh atomically; rollback on exception.
 
-- [ ] **Step 4: Make transaction semantics explicit**
+`mark_work_started()` must accept only `signed`, set `in_progress`, increment version, audit `contract.work_started`, and commit atomically.
 
-Every lifecycle command follows:
+- [ ] **Step 4: Add row locking for lifecycle mutation lookup**
+
+Add repository helper:
 
 ```python
-try:
-    # validate first
-    # mutate
-    db.flush()
-    write_audit(...)
-    db.commit()
-    db.refresh(contract)
-except Exception:
-    db.rollback()
-    raise
+def get_contract_for_update(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> Contract | None:
+    return db.scalar(
+        sa.select(Contract)
+        .where(
+            Contract.id == contract_id,
+            Contract.deleted_at.is_(None),
+        )
+        .with_for_update()
+    )
 ```
 
-Validation failures occur before persistent mutation wherever possible.
+Lifecycle commands invoked by the API must reload/lock the contract immediately before mutating it. Service-level tests may pass the locked row returned by this helper.
 
 - [ ] **Step 5: Verify GREEN**
 
@@ -377,7 +483,7 @@ python -m pytest -q tests/integration/test_contract_lifecycle.py -k "transition 
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Commit Task 3**
 
 ```powershell
 git add app/modules/contracts/lifecycle.py app/modules/contracts/repository.py tests/integration/test_contract_lifecycle.py
@@ -386,7 +492,7 @@ git commit -m "feat: add contract lifecycle state machine"
 
 ---
 
-### Task 4: Implement suspension, resume, and termination atomically
+### Task 4: Implement suspension, resume, and termination
 
 **Files:**
 - Modify: `app/modules/contracts/lifecycle.py`
@@ -394,55 +500,88 @@ git commit -m "feat: add contract lifecycle state machine"
 - Modify: `tests/integration/test_contract_lifecycle.py`
 
 **Interfaces:**
-- Produces `suspend(db, *, actor_id, contract, reason) -> ContractSuspension`.
-- Produces `resume(db, *, actor_id, contract) -> ContractSuspension` returning the now-closed row.
-- Produces `terminate(db, *, actor_id, contract, reason) -> Contract`.
-- Repository helpers: `get_open_contract_suspension()` and `list_contract_suspensions()`.
+- Produces `suspend(db, actor_id, contract, reason) -> ContractSuspension`.
+- Produces `resume(db, actor_id, contract) -> ContractSuspension` returning the closed interval.
+- Produces `terminate(db, actor_id, contract, reason) -> Contract`.
+- Produces `get_open_contract_suspension()` and `list_contract_suspensions()`.
 
-- [ ] **Step 1: Add RED tests**
+- [ ] **Step 1: Write RED suspension/termination tests**
 
-Cover:
-- suspend only from `in_progress`;
-- mandatory non-blank reason;
-- exactly one open suspension;
-- resume only from `suspended` and requires an open row;
-- resume closes `ended_at` and status becomes `in_progress`;
-- termination only from `signed/in_progress/suspended`;
-- termination reason mandatory;
-- termination from suspended closes the open suspension;
-- invalid duplicate/transition attempts preserve status, rows, versions, and audit counts.
+Add these named tests:
+- `test_suspend_requires_in_progress_and_reason`;
+- `test_suspend_creates_one_open_interval`;
+- `test_second_open_suspension_is_rejected_by_service`;
+- `test_second_open_suspension_is_rejected_by_database`;
+- `test_resume_requires_suspended_and_open_interval`;
+- `test_resume_closes_interval_and_restores_in_progress`;
+- `test_terminate_requires_dedicated_domain_command_and_reason`;
+- `test_terminate_from_suspended_closes_open_interval`.
 
-- [ ] **Step 2: Run RED tests**
+Each rejected-command test captures status/version/audit count before the call and verifies they are unchanged after `db_session.refresh()`.
+
+- [ ] **Step 2: Run focused tests and verify RED**
 
 ```powershell
 python -m pytest -q tests/integration/test_contract_lifecycle.py -k "suspend or resume or terminate"
 ```
 
-Expected: FAIL because commands are absent.
+Expected: failing assertions because the commands are absent.
 
-- [ ] **Step 3: Implement repository helpers**
+- [ ] **Step 3: Add suspension repository helpers**
+
+Implement:
 
 ```python
-def get_open_contract_suspension(db: Session, contract_id: uuid.UUID) -> ContractSuspension | None: ...
-def list_contract_suspensions(db: Session, contract_id: uuid.UUID) -> list[ContractSuspension]: ...
+def get_open_contract_suspension(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> ContractSuspension | None:
+    return db.scalar(
+        sa.select(ContractSuspension).where(
+            ContractSuspension.contract_id == contract_id,
+            ContractSuspension.ended_at.is_(None),
+        )
+    )
+
+
+def list_contract_suspensions(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> list[ContractSuspension]:
+    return list(
+        db.scalars(
+            sa.select(ContractSuspension)
+            .where(ContractSuspension.contract_id == contract_id)
+            .order_by(
+                ContractSuspension.started_at.asc(),
+                ContractSuspension.id.asc(),
+            )
+        ).all()
+    )
 ```
 
-Order history by `started_at`, then `id`.
+- [ ] **Step 4: Implement `suspend()`**
 
-- [ ] **Step 4: Implement lifecycle commands**
+Behavior is exact:
+- clean `reason.strip()` and reject empty;
+- require status `in_progress`;
+- reject if open suspension exists;
+- create `ContractSuspension(started_at=datetime.now(UTC), reason=clean_reason, created_by=actor_id)`;
+- set status `suspended`, increment version;
+- audit action `contract.suspended` with metadata `{"reason": clean_reason}`;
+- flush, commit, refresh contract and suspension; rollback on exception.
 
-Use `datetime.now(UTC)`. Audit actions:
-- `contract.suspended`;
-- `contract.resumed`;
-- `contract.terminated`.
+- [ ] **Step 5: Implement `resume()` and `terminate()`**
 
-Persist the reason in the audit summary/metadata convention already supported by `write_audit`; do not add a generic contract reason column.
+`resume()` requires `suspended` plus one open interval, sets `ended_at=datetime.now(UTC)`, status `in_progress`, increments version, and audits `contract.resumed`.
 
-- [ ] **Step 5: Prove the DB invariant independently**
+`terminate()` requires status in `{signed, in_progress, suspended}`, a non-empty reason, closes the open suspension when current status is `suspended`, sets `terminated`, increments version, and audits `contract.terminated` with metadata `{"reason": clean_reason}`.
 
-Add a test that manually attempts to flush a second open `ContractSuspension` and expects `sqlalchemy.exc.IntegrityError`; rollback afterwards. This confirms the partial unique index is not only service-level logic.
+- [ ] **Step 6: Prove the partial unique index independently**
 
-- [ ] **Step 6: Verify GREEN**
+In `test_second_open_suspension_is_rejected_by_database`, insert two open rows for one contract directly with ORM, flush, assert `sqlalchemy.exc.IntegrityError`, then rollback.
+
+- [ ] **Step 7: Verify GREEN**
 
 ```powershell
 python -m pytest -q tests/integration/test_contract_lifecycle.py
@@ -450,7 +589,7 @@ python -m pytest -q tests/integration/test_contract_lifecycle.py
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit Task 4**
 
 ```powershell
 git add app/modules/contracts/lifecycle.py app/modules/contracts/repository.py tests/integration/test_contract_lifecycle.py
@@ -467,15 +606,21 @@ git commit -m "feat: add contract suspension and termination lifecycle"
 - Create: `tests/integration/test_contract_completion.py`
 
 **Interfaces:**
-- Produces immutable result types `CompletionCheck`, `CompletionBlocker`, `CompletionReadiness`.
-- Produces `CompletionReadinessProvider` Protocol with `key: str` and `check(db, contract) -> CompletionCheck`.
-- Produces `default_readiness_providers() -> dict[str, CompletionReadinessProvider]` with four unavailable providers.
-- `ContractLifecycleService(...providers...)` accepts an injectable registry for deterministic tests.
-- Produces `get_completion_readiness()` and `complete()`.
+- Produces `CompletionBlocker`, `CompletionCheck`, `CompletionReadiness`.
+- Produces `CompletionReadinessProvider` Protocol.
+- Produces `default_readiness_providers()` with four explicit unavailable providers.
+- `ContractLifecycleService` accepts an injected provider registry for deterministic tests.
 
 - [ ] **Step 1: Write RED readiness tests**
 
-Define a satisfied test provider:
+Create these tests:
+- `test_default_readiness_fails_closed_with_four_provider_blockers`;
+- `test_readiness_passes_with_four_satisfied_injected_providers`;
+- `test_complete_rechecks_readiness_and_rejects_blockers`;
+- `test_complete_allows_in_progress_with_satisfied_providers`;
+- `test_complete_rejects_non_in_progress_contract`.
+
+Use this concrete test provider:
 
 ```python
 class SatisfiedProvider:
@@ -483,34 +628,35 @@ class SatisfiedProvider:
         self.key = key
 
     def check(self, db: Session, contract: Contract) -> CompletionCheck:
-        return CompletionCheck(key=self.key, passed=True, blockers=[])
+        return CompletionCheck(key=self.key, passed=True, blockers=())
 ```
 
-Test default blockers are exactly:
-- `tasks_provider_unavailable`;
-- `expertises_provider_unavailable`;
-- `documents_provider_unavailable`;
-- `conclusion_delivery_provider_unavailable`.
-
-Test all-satisfied injected providers produce `ready_to_complete=True`.
-
-- [ ] **Step 2: Run RED tests**
+- [ ] **Step 2: Run readiness tests and verify RED**
 
 ```powershell
 python -m pytest -q tests/integration/test_contract_completion.py
 ```
 
-Expected: FAIL because readiness types/services do not exist.
+Expected: import failure because readiness types do not exist.
 
-- [ ] **Step 3: Implement `readiness.py`**
+- [ ] **Step 3: Implement readiness result types and Protocol**
 
-Use frozen dataclasses or equivalent explicit types:
+Create `readiness.py`:
 
 ```python
+from dataclasses import dataclass
+from typing import Protocol
+
+from sqlalchemy.orm import Session
+
+from app.modules.contracts.models import Contract
+
+
 @dataclass(frozen=True)
 class CompletionBlocker:
     code: str
     detail: str
+
 
 @dataclass(frozen=True)
 class CompletionCheck:
@@ -518,26 +664,50 @@ class CompletionCheck:
     passed: bool
     blockers: tuple[CompletionBlocker, ...]
 
+
 @dataclass(frozen=True)
 class CompletionReadiness:
     ready_to_complete: bool
     checks: tuple[CompletionCheck, ...]
     blockers: tuple[CompletionBlocker, ...]
+
+
+class CompletionReadinessProvider(Protocol):
+    key: str
+
+    def check(self, db: Session, contract: Contract) -> CompletionCheck:
+        raise NotImplementedError
 ```
 
-Required provider keys are exactly `tasks`, `expertises`, `documents`, `conclusion_delivery`.
+The Protocol body may use `raise NotImplementedError` because it is an interface contract, not a deferred implementation.
 
-- [ ] **Step 4: Implement lifecycle aggregation and completion**
+- [ ] **Step 4: Implement explicit unavailable providers**
 
-`get_completion_readiness()` aggregates all four required checks on every call. `complete()`:
-- requires contract status `in_progress` at domain level;
-- recalculates readiness inside the command;
-- raises `ContractValidationError` if any blocker exists;
-- sets status `completed`, increments version, audits `contract.completed`, commits atomically.
+Required keys and blocker codes:
 
-- [ ] **Step 5: Test fail-closed completion and successful injected completion**
+```python
+UNAVAILABLE_CODES = {
+    "tasks": "tasks_provider_unavailable",
+    "expertises": "expertises_provider_unavailable",
+    "documents": "documents_provider_unavailable",
+    "conclusion_delivery": "conclusion_delivery_provider_unavailable",
+}
+```
 
-Add assertions that default CP4.2 completion is rejected with no audit/status mutation, while four satisfied injected providers allow `in_progress -> completed`.
+`default_readiness_providers()` returns one unavailable provider for every key above. Each returns `passed=False` and exactly one blocker with the matching code.
+
+- [ ] **Step 5: Implement aggregation and completion**
+
+`ContractLifecycleService.get_completion_readiness()` must iterate required keys in this deterministic order: `tasks`, `expertises`, `documents`, `conclusion_delivery`, aggregate checks/blockers, and set `ready_to_complete = not blockers`.
+
+`complete()` must:
+1. require status `in_progress`;
+2. call readiness again inside the command;
+3. reject if any blocker exists;
+4. set status `completed`;
+5. increment version;
+6. audit `contract.completed`;
+7. commit/refresh atomically.
 
 - [ ] **Step 6: Verify GREEN**
 
@@ -547,7 +717,7 @@ python -m pytest -q tests/integration/test_contract_completion.py tests/integrat
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Commit Task 5**
 
 ```powershell
 git add app/modules/contracts/readiness.py app/modules/contracts/lifecycle.py tests/integration/test_contract_completion.py
@@ -556,7 +726,7 @@ git commit -m "feat: add fail-closed contract completion readiness"
 
 ---
 
-### Task 6: Implement additional agreements and atomic commercial effects
+### Task 6: Implement additional agreements and signed commercial effects
 
 **Files:**
 - Create: `app/modules/contracts/addenda.py`
@@ -565,52 +735,69 @@ git commit -m "feat: add fail-closed contract completion readiness"
 - Create: `tests/integration/test_contract_addenda.py`
 
 **Interfaces:**
-- Produces `ContractAddendumService.create_addendum(...) -> ContractAddendum`.
-- Produces `update_addendum(...) -> ContractAddendum`, `delete_addendum(...) -> None`, `change_status(...) -> ContractAddendum`.
-- Repository helpers `get_contract_addendum()`, `list_contract_addenda()`.
-- Addendum signing calls shared `calculate_effective_amount(..., pending_delta=...)` before mutation and `recalculate_effective_amount()` after status becomes signed.
+- Produces `ContractAddendumService.create_addendum()`.
+- Produces `update_addendum()`, `delete_addendum()`, `change_status()`.
+- Produces nested repository helpers `get_contract_addendum()` and `list_contract_addenda()`.
 
-- [ ] **Step 1: Write RED CRUD/lifecycle tests**
+- [ ] **Step 1: Write RED addendum lifecycle tests**
 
-Cover:
-- create only when parent is `signed/in_progress/suspended`;
-- default addendum currency copies parent contract currency;
-- edit/delete only `draft/approval` with allowed parent status;
-- `draft->approval`, `approval->signed`, `draft|approval->cancelled` only;
-- signed/cancelled immutable;
-- cannot sign after parent becomes terminal;
-- addendum with neither non-zero delta nor `new_end_date` cannot sign.
+Create these tests:
+- `test_addendum_create_allowed_only_for_signed_active_parent_statuses`;
+- `test_addendum_creation_copies_parent_currency`;
+- `test_addendum_edit_delete_allowed_only_draft_or_approval`;
+- `test_addendum_transition_matrix`;
+- `test_signed_and_cancelled_addenda_are_immutable`;
+- `test_addendum_cannot_sign_after_parent_becomes_terminal`;
+- `test_addendum_without_effect_cannot_sign`.
+
+Allowed transition pairs are exactly:
+
+```python
+allowed = {
+    (ContractAddendumStatus.DRAFT, ContractAddendumStatus.APPROVAL),
+    (ContractAddendumStatus.APPROVAL, ContractAddendumStatus.SIGNED),
+    (ContractAddendumStatus.DRAFT, ContractAddendumStatus.CANCELLED),
+    (ContractAddendumStatus.APPROVAL, ContractAddendumStatus.CANCELLED),
+}
+```
 
 - [ ] **Step 2: Write RED commercial-effect tests**
 
-Concrete scenario:
+Add:
+- `test_signed_addenda_recalculate_amount_and_effective_deadline`;
+- `test_negative_projected_effective_amount_is_rejected_atomically`;
+- `test_currency_mismatch_is_rejected_before_signing`;
+- `test_deadline_extension_requires_description_reason`;
+- `test_deadline_shortening_does_not_require_extension_reason`;
+- `test_signing_retry_does_not_double_apply_effect`;
+- `test_signed_addenda_history_has_deterministic_order`.
+
+The main scenario is:
 
 ```python
-# signed base items = 100_000.00
-# addendum A: +25_000.00, no date change
-# addendum B: -10_000.00, new_end_date=2026-12-31
+assert contract.amount == Decimal("100000.00")
+assert contract.original_end_date == date(2026, 9, 30)
+
+# After signed +25,000 agreement
+assert contract.amount == Decimal("125000.00")
+
+# After signed -10,000 agreement with new 2026-12-31 deadline
 assert contract.amount == Decimal("115000.00")
 assert contract.original_end_date == date(2026, 9, 30)
 assert contract.end_date == date(2026, 12, 31)
 ```
 
-Also test:
-- negative projected amount is rejected atomically;
-- currency mismatch rejected;
-- extending current end date requires non-blank description;
-- shortening deadline does not require an extension reason;
-- signing retry cannot double-apply delta;
-- signed chain is ordered by `signed_at`, then UUID for reconstruction.
-
-- [ ] **Step 3: Run RED tests**
+- [ ] **Step 3: Run addendum tests and verify RED**
 
 ```powershell
 python -m pytest -q tests/integration/test_contract_addenda.py
 ```
 
-Expected: FAIL because service/repository helpers do not exist.
+Expected: import failure because `ContractAddendumService` does not exist.
 
-- [ ] **Step 4: Implement repository helpers**
+- [ ] **Step 4: Add nested repository helpers**
+
+Implement exact lookup semantics:
 
 ```python
 def get_contract_addendum(
@@ -619,52 +806,58 @@ def get_contract_addendum(
     addendum_id: uuid.UUID,
     *,
     include_deleted: bool = False,
-) -> ContractAddendum | None: ...
-
-
-def list_contract_addenda(db: Session, contract_id: uuid.UUID) -> list[ContractAddendum]: ...
+) -> ContractAddendum | None:
+    stmt = sa.select(ContractAddendum).where(
+        ContractAddendum.id == addendum_id,
+        ContractAddendum.contract_id == contract_id,
+    )
+    if not include_deleted:
+        stmt = stmt.where(ContractAddendum.deleted_at.is_(None))
+    return db.scalar(stmt)
 ```
 
-Nested lookup must always include `contract_id` in the predicate.
+`list_contract_addenda()` filters deleted rows and orders by `addendum_date`, `created_at`, `id`.
 
-- [ ] **Step 5: Implement `ContractAddendumService`**
+- [ ] **Step 5: Implement addendum creation/update/delete guards**
 
-Creation signature:
+Parent statuses allowed for creation/edit/sign are exactly `{signed, in_progress, suspended}`.
 
-```python
-def create_addendum(
-    self,
-    db: Session,
-    *,
-    actor_id: uuid.UUID,
-    contract: Contract,
-    number: str,
-    addendum_date: date,
-    amount_delta: Decimal | None,
-    new_end_date: date | None,
-    description: str | None,
-) -> ContractAddendum: ...
-```
+`create_addendum()` accepts `actor_id`, `contract`, `number`, `addendum_date`, `amount_delta`, `new_end_date`, `description`; it copies `contract.currency` and sets `created_by=updated_by=actor_id`.
 
-Normalize money to two decimals; allow positive/negative delta; treat `0.00` as no financial effect. On signing, validate projected amount with `pending_delta`, then atomically set `signed_at`, status, effective end date, recalculated amount, versions, and audit.
+Normalize non-null `amount_delta` with `Decimal(value).quantize(Decimal("0.01"))`; both positive and negative values are allowed.
 
-Audit actions:
-- `contract_addendum.created`;
-- `contract_addendum.updated`;
-- `contract_addendum.deleted`;
-- `contract_addendum.status_changed` for approval;
-- `contract_addendum.signed`;
-- `contract_addendum.cancelled`.
+`update_addendum()` and `delete_addendum()` reject signed/cancelled rows and terminal parent contracts.
 
-- [ ] **Step 6: Verify GREEN and CP4.1 amount regression**
+- [ ] **Step 6: Implement addendum status changes atomically**
+
+For `approval->signed`:
+1. lock/reload parent and addendum;
+2. require parent status in `{signed, in_progress, suspended}`;
+3. require either non-zero delta or `new_end_date`;
+4. require `addendum.currency == contract.currency`;
+5. if `new_end_date` is later than current `end_date`, require non-empty `description`;
+6. if `start_date` exists, reject `new_end_date < start_date`;
+7. compute `projected = calculate_effective_amount(db, contract.id, pending_delta=amount_delta_or_zero)` and reject `projected < 0`;
+8. set `signed_at=datetime.now(UTC)` once and status `signed`;
+9. apply `new_end_date` to `contract.end_date` when present;
+10. call `recalculate_effective_amount()` after the row status becomes signed;
+11. increment addendum and contract versions once;
+12. audit `contract_addendum.signed` with amount/deadline metadata;
+13. commit/refresh atomically.
+
+For cancellation, set `cancelled`, increment addendum version, audit `contract_addendum.cancelled`, and do not alter contract amount/end date.
+
+For `draft->approval`, audit `contract_addendum.status_changed` with `from/to` metadata.
+
+- [ ] **Step 7: Verify GREEN and CP4.1 amount regression**
 
 ```powershell
 python -m pytest -q tests/integration/test_contract_addenda.py tests/integration/test_contracts_core.py
 ```
 
-Expected: PASS; contracts without signed addenda still equal the active item sum.
+Expected: PASS; contracts with no signed addenda still equal active item total.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit Task 6**
 
 ```powershell
 git add app/modules/contracts/addenda.py app/modules/contracts/repository.py app/modules/contracts/commercial.py tests/integration/test_contract_addenda.py
@@ -673,7 +866,7 @@ git commit -m "feat: add contract additional agreements"
 
 ---
 
-### Task 7: Expose lifecycle, readiness, and addenda through permission-safe API commands
+### Task 7: Expose lifecycle/readiness/addenda through permission-safe API commands
 
 **Files:**
 - Modify: `app/modules/contracts/schemas.py`
@@ -681,90 +874,110 @@ git commit -m "feat: add contract additional agreements"
 - Create: `tests/integration/test_contract_lifecycle_api.py`
 
 **Interfaces:**
-- Public lifecycle commands use dedicated endpoints; `status` is never writable through ordinary `PATCH /api/contracts/{id}`.
-- `GET completion-readiness` requires `contracts.view` in scope.
+- `GET completion-readiness` requires `contracts.view`.
 - `POST complete` requires `contracts.complete`.
 - `POST terminate` requires `contracts.terminate`.
-- Ordinary `/status`, `/suspend`, `/resume` require `contracts.change_status`.
-- Addenda GET uses `contracts.view`; addenda mutations use `contracts.manage_addenda`.
+- `/status`, `/suspend`, `/resume` require `contracts.change_status`.
+- Addenda reads require `contracts.view`; addenda mutations require `contracts.manage_addenda`.
+- Ordinary PATCH never accepts a status field.
 
-- [ ] **Step 1: Add request/response schemas**
+- [ ] **Step 1: Add explicit Pydantic schemas**
 
-In `schemas.py` add explicit models:
+Add these concrete schemas:
 
 ```python
 class ContractStatusChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
     status: ContractStatus
 
+
 class ContractReasonCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reason: str = Field(min_length=1)
 
-class ContractAddendumCreate(BaseModel): ...
-class ContractAddendumUpdate(BaseModel): ...
-class ContractAddendumStatusChange(BaseModel): ...
-class ContractAddendumResponse(BaseModel): ...
-class CompletionBlockerResponse(BaseModel): ...
-class CompletionCheckResponse(BaseModel): ...
-class ContractCompletionReadinessResponse(BaseModel): ...
+
+class ContractAddendumCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    number: str = Field(min_length=1, max_length=120)
+    addendum_date: date
+    amount_delta: Decimal | None = None
+    new_end_date: date | None = None
+    description: str | None = None
+
+
+class ContractAddendumUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    number: str | None = Field(default=None, max_length=120)
+    addendum_date: date | None = None
+    amount_delta: Decimal | None = None
+    new_end_date: date | None = None
+    description: str | None = None
+
+
+class ContractAddendumStatusChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: ContractAddendumStatus
 ```
 
-Add `original_end_date: date | None` to `ContractResponse`. Do not add `status` to `ContractUpdate` or `ContractAddendumUpdate`.
+Add response models mirroring the approved fields and readiness dataclasses. Add `original_end_date: date | None` to `ContractResponse`. Do not add `status` to `ContractUpdate` or `ContractAddendumUpdate`.
 
-- [ ] **Step 2: Write RED API tests before routes**
+- [ ] **Step 2: Write RED API tests**
 
-Test route presence and permission isolation:
-- a user with only `contracts.change_status` cannot terminate or complete;
-- a user with only `contracts.terminate` cannot call ordinary `/status`;
-- a user with only `contracts.complete` cannot call `/terminate`;
-- a user with `contracts.manage_addenda` but no access scope to the parent receives the same 404 as a foreign ID;
-- `PATCH /api/contracts/{id}` with `{"status": "signed"}` is rejected by Pydantic extra-forbid;
-- no endpoint permits manual `signed -> in_progress`.
+Create these named tests:
+- `test_status_endpoint_requires_change_status_permission`;
+- `test_terminate_endpoint_requires_terminate_permission_only`;
+- `test_complete_endpoint_requires_complete_permission_only`;
+- `test_dedicated_permissions_do_not_grant_each_other`;
+- `test_patch_contract_rejects_status_field`;
+- `test_no_public_command_starts_signed_contract_manually`;
+- `test_completion_readiness_returns_fail_closed_blockers`;
+- `test_addenda_read_uses_view_permission`;
+- `test_addenda_mutation_uses_manage_addenda_permission`;
+- `test_foreign_nested_addendum_returns_same_404_as_unknown_id`.
 
-- [ ] **Step 3: Run RED API tests**
+- [ ] **Step 3: Run API tests and verify RED**
 
 ```powershell
 python -m pytest -q tests/integration/test_contract_lifecycle_api.py
 ```
 
-Expected: route/schema failures.
+Expected: 404/405/schema failures because routes are not registered.
 
 - [ ] **Step 4: Add contract command routes**
 
-Implement exactly:
+Register exactly:
 
 ```text
-POST /api/contracts/{id}/status
-POST /api/contracts/{id}/suspend
-POST /api/contracts/{id}/resume
-POST /api/contracts/{id}/terminate
-GET  /api/contracts/{id}/completion-readiness
-POST /api/contracts/{id}/complete
+POST /api/contracts/{contract_id}/status
+POST /api/contracts/{contract_id}/suspend
+POST /api/contracts/{contract_id}/resume
+POST /api/contracts/{contract_id}/terminate
+GET  /api/contracts/{contract_id}/completion-readiness
+POST /api/contracts/{contract_id}/complete
 ```
 
-Reuse `_contract_or_404()` with the command-specific `AuthorizationContext` returned by `require_scoped_permission(...)`.
+Each route obtains the command-specific `AuthorizationContext` from `require_scoped_permission()`, uses `_contract_or_404()` with that context, reloads/locks before mutation when required, calls the corresponding lifecycle service method, and maps `ContractValidationError` to `_unprocessable(str(exc))`.
 
 - [ ] **Step 5: Add nested addenda routes**
 
-Implement:
+Register exactly:
 
 ```text
-GET    /api/contracts/{id}/addenda
-POST   /api/contracts/{id}/addenda
-GET    /api/contracts/{id}/addenda/{addendum_id}
-PATCH  /api/contracts/{id}/addenda/{addendum_id}
-DELETE /api/contracts/{id}/addenda/{addendum_id}
-POST   /api/contracts/{id}/addenda/{addendum_id}/status
+GET    /api/contracts/{contract_id}/addenda
+POST   /api/contracts/{contract_id}/addenda
+GET    /api/contracts/{contract_id}/addenda/{addendum_id}
+PATCH  /api/contracts/{contract_id}/addenda/{addendum_id}
+DELETE /api/contracts/{contract_id}/addenda/{addendum_id}
+POST   /api/contracts/{contract_id}/addenda/{addendum_id}/status
 ```
 
-Use nested lookup `(contract_id, addendum_id)` and the same contract-level 404 anti-enumeration rule.
+Nested resource lookup always uses both `contract_id` and `addendum_id`. Reads use `contracts.view`; mutations use `contracts.manage_addenda`. Parent scope denial and unknown nested ID both return 404.
 
-- [ ] **Step 6: Map domain validation consistently**
+- [ ] **Step 6: Keep signed work-start internal**
 
-All `ContractValidationError` failures become existing `422 Unprocessable Entity` through `_unprocessable(str(exc))`. Missing/out-of-scope resources stay 404. Permission dependency behavior stays unchanged.
+Do not create a route for `mark_work_started()`. Add a test that posts `{"status": "in_progress"}` to `/status` for a signed contract and receives 422 without changing the contract.
 
-- [ ] **Step 7: Verify GREEN**
+- [ ] **Step 7: Verify GREEN and CP4.1 API regression**
 
 ```powershell
 python -m pytest -q tests/integration/test_contract_lifecycle_api.py tests/integration/test_contracts_api.py tests/integration/test_contracts_api_mutations.py tests/integration/test_contracts_api_queries.py
@@ -772,7 +985,7 @@ python -m pytest -q tests/integration/test_contract_lifecycle_api.py tests/integ
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 8: Commit Task 7**
 
 ```powershell
 git add app/modules/contracts/schemas.py app/modules/contracts/routes.py tests/integration/test_contract_lifecycle_api.py
@@ -781,45 +994,50 @@ git commit -m "feat: expose contract lifecycle and addenda API"
 
 ---
 
-### Task 8: Close rollback, audit, migration, and authorization edge cases
+### Task 8: Close atomicity, audit, migration, and authorization edge cases
 
 **Files:**
 - Modify: `tests/integration/test_contract_lifecycle.py`
 - Modify: `tests/integration/test_contract_addenda.py`
 - Modify: `tests/integration/test_contract_completion.py`
 - Modify: `tests/integration/test_contract_lifecycle_api.py`
-- Modify production files only when a failing test proves a gap.
+- Modify production files only when a new failing test proves a defect.
 
 **Interfaces:**
-- No new public API is introduced in this task.
-- Produces proof that CP4.2 satisfies atomicity and exact permission isolation rather than only happy-path behavior.
+- No new public interfaces.
+- Produces explicit proof of rollback, audit cleanliness, one-head migration behavior, and exact scope isolation.
 
-- [ ] **Step 1: Add explicit audit-count helpers and rejected-command assertions**
+- [ ] **Step 1: Add rejected-command audit assertions**
 
-For every command family, capture audit count before rejection and assert it remains unchanged afterward:
+For each audit action `contract.status_changed`, `contract.suspended`, `contract.resumed`, `contract.terminated`, `contract.completed`, `contract_addendum.signed`, capture the action count before an invalid command and assert the count is unchanged afterward.
+
+Use the concrete structure:
 
 ```python
 before = _audit_count(db_session, "contract.suspended")
 with pytest.raises(ContractValidationError):
-    lifecycle.suspend(..., reason="   ")
+    lifecycle.suspend(
+        db_session,
+        actor_id=actor_id,
+        contract=contract,
+        reason="   ",
+    )
 assert _audit_count(db_session, "contract.suspended") == before
 ```
 
-Repeat for invalid status, resume, terminate, complete, addendum signing, and post-sign item mutation.
+- [ ] **Step 2: Add rollback/version assertions**
 
-- [ ] **Step 2: Add version/state rollback assertions**
+For every rejected mutation, record the relevant `version`, `status`, `amount`, `end_date`, `signed_at`, or `deleted_at`; call `db_session.refresh()` after the exception; assert every recorded value is unchanged.
 
-After each rejected command call `db_session.refresh(entity)` and assert status/version/amount/end_date/signed_at/deleted_at are unchanged.
+- [ ] **Step 3: Add `0012 -> 0011 -> 0012` migration smoke test**
 
-- [ ] **Step 3: Add migration downgrade/upgrade smoke coverage**
+Follow the repository's existing Alembic integration-test execution approach. The test must downgrade only to `0011_stage4_contracts_core`, assert `contract_addenda` and `contract_suspensions` disappear, upgrade to head, then assert both tables and `uq_contract_suspensions_one_open` exist again.
 
-Use the existing migration-test pattern to prove `0012 -> 0011 -> 0012` works on the test database and leaves enum/table/index state correct. Do not downgrade below CP4.1 in this test.
+- [ ] **Step 4: Add ALL/RELATED/ASSIGNED/OWN API scope cases**
 
-- [ ] **Step 4: Add exact RBAC scope cases**
+Use existing identity grant fixtures to test one `/status` mutation and one addendum mutation under each scope. Each authorized scope returns the command's normal business result; a non-matching scope returns 404. Run dedicated-permission isolation independently from scope matching.
 
-Cover ALL/RELATED/ASSIGNED/OWN for at least one lifecycle mutation and one addendum mutation, reusing existing authorization fixture patterns. Verify permission-name isolation separately from scope matching.
-
-- [ ] **Step 5: Run all Stage 4 focused tests**
+- [ ] **Step 5: Run the complete Stage 4 focused suite**
 
 ```powershell
 python -m pytest -q tests/integration/test_contracts_core.py tests/integration/test_contracts_api.py tests/integration/test_contracts_api_mutations.py tests/integration/test_contracts_api_queries.py tests/integration/test_contract_lifecycle.py tests/integration/test_contract_addenda.py tests/integration/test_contract_completion.py tests/integration/test_contract_lifecycle_api.py tests/integration/test_stage4_cp42_migration.py
@@ -827,18 +1045,18 @@ python -m pytest -q tests/integration/test_contracts_core.py tests/integration/t
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit any edge-case fixes and tests**
+- [ ] **Step 6: Commit Task 8**
 
 ```powershell
 git add app/modules/contracts tests/integration
 git commit -m "test: close CP4.2 lifecycle edge cases"
 ```
 
-If Step 5 required no production changes, commit only the new/strengthened tests.
+If no production file changed, stage only the test files that changed.
 
 ---
 
-### Task 9: Reconcile docs, run full verification, and prepare review checkpoint
+### Task 9: Reconcile docs, run full verification, and prepare the review checkpoint
 
 **Files:**
 - Modify: `PROJECT_STATUS.md`
@@ -849,27 +1067,19 @@ If Step 5 required no production changes, commit only the new/strengthened tests
 - Keep: `docs/superpowers/plans/2026-08-12-stage4-cp42-contract-lifecycle-addenda.md`
 
 **Interfaces:**
-- Produces a documented, reviewable CP4.2 checkpoint; no integration merge.
+- Produces a documented, reviewable CP4.2 checkpoint.
+- Does not merge into integration.
 
-- [ ] **Step 1: Update authoritative docs to the approved permission/lifecycle semantics**
+- [ ] **Step 1: Reconcile authoritative docs with the approved design**
 
-Make these exact reconciliations:
-- completion uses `contracts.complete`, not `contracts.change_status`;
-- termination uses `contracts.terminate`;
-- Tasks/Expertises/Documents side effects are explicitly deferred to owning stages;
-- `original_end_date`, `contract_suspensions`, `contract_addenda`, addendum terminal statuses, and fail-closed readiness are reflected in the data/business rules;
-- addendum document FK remains deferred to Stage 8.
+Make these exact corrections:
+- completion requires `contracts.complete`, not `contracts.change_status`;
+- termination requires `contracts.terminate`;
+- Tasks/Expertises/Documents/Notifications side effects stay deferred to their owning stages;
+- document `original_end_date`, `contract_suspensions`, `contract_addenda`, addendum terminal statuses, effective amount formula, and fail-closed readiness;
+- document that addendum `document_id` remains deferred to Stage 8.
 
-- [ ] **Step 2: Update `PROJECT_STATUS.md` only after tests are green**
-
-Record:
-- CP4.2 branch and final implementation commit;
-- migration head `0012_stage4_contract_lifecycle_addenda`;
-- implemented lifecycle/addenda/readiness scope;
-- deferred Stage 5/6/8 integrations;
-- final test count from the actual verification run.
-
-- [ ] **Step 3: Run static and migration verification**
+- [ ] **Step 2: Run static and migration verification before status claims**
 
 ```powershell
 python -m ruff check .
@@ -877,57 +1087,60 @@ alembic heads
 alembic upgrade head
 ```
 
-Expected: Ruff PASS; exactly one Alembic head `0012_stage4_contract_lifecycle_addenda`; upgrade succeeds.
+Expected: Ruff PASS; one head named `0012_stage4_contract_lifecycle_addenda`; upgrade succeeds.
 
-- [ ] **Step 4: Run the complete test suite**
+- [ ] **Step 3: Run the full test suite**
 
 ```powershell
 python -m pytest -q
 ```
 
-Expected: all tests PASS. Record the exact pass/warning counts; do not predict or hard-code them before the run.
+Expected: all tests PASS. Record the exact pass and warning counts from this run; do not predict them.
 
-- [ ] **Step 5: Verify stacked ancestry and integration isolation**
+- [ ] **Step 4: Verify stacked ancestry and integration isolation**
 
 ```powershell
 git merge-base --is-ancestor fa11c71726cea0fb92ed6f1df777456ab0ab830c HEAD
 git log --oneline --decorate fa11c71726cea0fb92ed6f1df777456ab0ab830c..HEAD
 ```
 
-Expected: first command exits 0. Compare the integration branch separately; do not merge it.
+Expected: ancestry command exits 0. Do not merge/rebase the integration branch.
 
-- [ ] **Step 6: Commit documentation/status update**
+- [ ] **Step 5: Update `PROJECT_STATUS.md` with verified facts only**
+
+Record:
+- branch name;
+- final implementation commit;
+- migration head `0012_stage4_contract_lifecycle_addenda`;
+- implemented lifecycle/addenda/readiness scope;
+- deferred Stage 5/6/8 integrations;
+- exact pytest/Ruff/Alembic results from Steps 2–3.
+
+- [ ] **Step 6: Commit documentation/status**
 
 ```powershell
 git add PROJECT_STATUS.md docs/BUSINESS_RULES.md docs/DATA_MODEL.md docs/PERMISSIONS.md
 git commit -m "docs: record CP4.2 contract lifecycle checkpoint"
 ```
 
-- [ ] **Step 7: Push the stacked branch and create/update a draft review PR**
+- [ ] **Step 7: Push and create a stacked draft PR**
 
-The review PR should target `agent/stage4-cp41-contracts-core` so the CP4.2 diff is isolated from CP4.1. Its body must state:
-- CP4.2 depends on CP4.1;
-- exact final commit and migration head;
-- exact test/CI results;
-- Tasks/Expertises/Documents integrations remain deferred;
-- **DO NOT MERGE into integration automatically**.
+Target base branch `agent/stage4-cp41-contracts-core` so the PR contains CP4.2 only. The PR body must state CP4.1 dependency, exact final HEAD, migration head, exact verification results, deferred Tasks/Expertises/Documents integrations, and the sentence **DO NOT MERGE into integration automatically**.
 
 - [ ] **Step 8: Verify CI on the exact final HEAD**
 
-Check Ruff, Alembic, and pytest jobs. If any job fails, use systematic debugging, add a reproducing test when applicable, fix on the CP4.2 branch, rerun full verification, and update the review checkpoint with the new exact HEAD.
+Check Ruff, Alembic, and pytest jobs for the exact pushed commit. If a job fails, invoke systematic debugging, reproduce locally or in a focused test, fix only the proven defect, rerun full verification, push the corrected HEAD, and update the PR/checkpoint facts.
 
 ---
 
 ## Final Acceptance Checklist
 
-Before CP4.2 is declared complete, all of the following must be true:
-
 - [ ] `0012_stage4_contract_lifecycle_addenda` is the only Alembic head.
-- [ ] Contract signing requires start date, end date, at least one active item, and at least one responsible.
+- [ ] Signing requires start date, end date, at least one active item, and at least one responsible.
 - [ ] `original_end_date` is captured once and remains immutable.
 - [ ] Public ordinary transitions match the approved state machine exactly.
 - [ ] No public endpoint exposes manual `signed -> in_progress`.
-- [ ] Signed legal terms/items are immutable; responsibles remain editable only until terminal status; comment is editable until archive.
+- [ ] Signed legal terms/items are immutable; responsibles remain editable only until terminal status; comment remains editable until archive.
 - [ ] Contract deletion is limited to draft/approval.
 - [ ] Suspension has a mandatory reason and exactly one open row maximum.
 - [ ] Resume closes the authoritative suspension interval.
