@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -8,6 +9,13 @@ from app.modules.contracts import repository
 from app.modules.contracts.commercial import calculate_effective_amount
 from app.modules.contracts.enums import ContractStatus
 from app.modules.contracts.models import Contract, ContractSuspension
+from app.modules.contracts.readiness import (
+    REQUIRED_READINESS_KEYS,
+    CompletionReadiness,
+    CompletionReadinessProvider,
+    default_readiness_providers,
+    unavailable_readiness_provider,
+)
 from app.modules.contracts.service import ContractValidationError
 from app.modules.identity.audit import write_audit
 
@@ -26,6 +34,17 @@ TERMINATABLE_STATUSES = {
 
 
 class ContractLifecycleService:
+    def __init__(
+        self,
+        *,
+        readiness_providers: Mapping[str, CompletionReadinessProvider] | None = None,
+    ) -> None:
+        self._readiness_providers = (
+            dict(readiness_providers)
+            if readiness_providers is not None
+            else default_readiness_providers()
+        )
+
     def change_status(
         self,
         db: Session,
@@ -244,6 +263,70 @@ class ContractLifecycleService:
             db.refresh(contract)
             if suspension is not None:
                 db.refresh(suspension)
+        except Exception:
+            db.rollback()
+            raise
+        return contract
+
+    def get_completion_readiness(
+        self,
+        db: Session,
+        *,
+        contract: Contract,
+    ) -> CompletionReadiness:
+        self._require_active_contract(contract)
+        checks = []
+        blockers = []
+        for key in REQUIRED_READINESS_KEYS:
+            provider = self._readiness_providers.get(key)
+            if provider is None:
+                provider = unavailable_readiness_provider(key)
+            check = provider.check(db, contract)
+            checks.append(check)
+            blockers.extend(check.blockers)
+
+        ready_to_complete = not blockers and all(check.passed for check in checks)
+        return CompletionReadiness(
+            ready_to_complete=ready_to_complete,
+            checks=tuple(checks),
+            blockers=tuple(blockers),
+        )
+
+    def complete(
+        self,
+        db: Session,
+        *,
+        actor_id: uuid.UUID,
+        contract: Contract,
+    ) -> Contract:
+        self._require_active_contract(contract)
+        if contract.status != ContractStatus.IN_PROGRESS:
+            raise ContractValidationError(
+                "Завершить можно только договор в работе"
+            )
+
+        readiness = self.get_completion_readiness(db, contract=contract)
+        if not readiness.ready_to_complete:
+            blocker_codes = ", ".join(blocker.code for blocker in readiness.blockers)
+            raise ContractValidationError(
+                f"Договор не готов к завершению: {blocker_codes or 'readiness_failed'}"
+            )
+
+        contract.status = ContractStatus.COMPLETED
+        contract.version += 1
+        try:
+            db.flush()
+            write_audit(
+                db,
+                user_id=actor_id,
+                action="contract.completed",
+                entity_type="contract",
+                entity_id=contract.id,
+                summary=f"Завершён договор {contract.number}",
+                result="success",
+            )
+            db.commit()
+            db.refresh(contract)
         except Exception:
             db.rollback()
             raise
