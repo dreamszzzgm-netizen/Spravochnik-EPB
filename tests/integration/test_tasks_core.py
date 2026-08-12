@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -268,10 +269,11 @@ def test_contract_item_link_must_match_explicit_contract_link(db_session: Sessio
 
 
 def test_delete_restore_and_repository_include_deleted(db_session: Session) -> None:
-    from app.modules.tasks import repository, service as task_service
+    from app.modules.tasks.service import TaskService
 
+    repository = importlib.import_module("app.modules.tasks.repository")
     actor, actor_employee = _make_actor(db_session, "delete-restore")
-    task = task_service.TaskService().create_task(
+    task = TaskService().create_task(
         db_session,
         actor_user_id=actor.id,
         creator_employee_id=actor_employee.id,
@@ -284,17 +286,13 @@ def test_delete_restore_and_repository_include_deleted(db_session: Session) -> N
         links=[],
     )
 
-    task_service.TaskService().delete_task(
-        db_session, actor_user_id=actor.id, task=task
-    )
+    TaskService().delete_task(db_session, actor_user_id=actor.id, task=task)
     assert repository.get_task(db_session, task.id) is None
     deleted = repository.get_task(db_session, task.id, include_deleted=True)
     assert deleted is not None
     assert deleted.deleted_at is not None
 
-    task_service.TaskService().restore_task(
-        db_session, actor_user_id=actor.id, task=deleted
-    )
+    TaskService().restore_task(db_session, actor_user_id=actor.id, task=deleted)
     restored = repository.get_task(db_session, task.id)
     assert restored is not None
     assert restored.deleted_at is None
