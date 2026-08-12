@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import date
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
@@ -198,7 +199,7 @@ def list_tasks(
     db: Session = Depends(get_db),
     assignee_id: uuid.UUID | None = None,
     creator_employee_id: uuid.UUID | None = None,
-    task_status: TaskStatus | None = Query(default=None, alias="status"),
+    task_status: Annotated[TaskStatus | None, Query(alias="status")] = None,
     priority: TaskPriority | None = None,
     due_from: date | None = None,
     due_to: date | None = None,
@@ -206,8 +207,8 @@ def list_tasks(
     organization_id: uuid.UUID | None = None,
     is_overdue: bool | None = None,
     include_deleted: bool = False,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> TaskPaginatedResponse:
     if include_deleted and not access.read_all:
         raise HTTPException(
