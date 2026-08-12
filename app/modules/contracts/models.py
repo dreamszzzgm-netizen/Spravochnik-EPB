@@ -20,13 +20,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
 from app.database.enums import enum_values
-from app.modules.contracts.enums import ContractStatus
+from app.modules.contracts.enums import ContractAddendumStatus, ContractStatus
 
 
 class ExpertiseType(Base):
     __tablename__ = "expertise_types"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     code: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -35,7 +37,9 @@ class ExpertiseType(Base):
 class Contract(Base):
     __tablename__ = "contracts"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     customer_organization_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="RESTRICT"),
@@ -52,6 +56,7 @@ class Contract(Base):
     contract_date: Mapped[date] = mapped_column(Date, nullable=False)
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
+    original_end_date: Mapped[date | None] = mapped_column(Date)
     amount: Mapped[Decimal] = mapped_column(
         Numeric(14, 2), nullable=False, default=Decimal("0.00")
     )
@@ -99,7 +104,9 @@ class ContractResponsible(Base):
 class ContractItem(Base):
     __tablename__ = "contract_items"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     contract_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("contracts.id", ondelete="CASCADE"),
@@ -158,3 +165,71 @@ class ContractItemBuilding(Base):
         ForeignKey("buildings.id", ondelete="RESTRICT"),
         primary_key=True,
     )
+
+
+class ContractSuspension(Base):
+    __tablename__ = "contract_suspensions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    contract_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("contracts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class ContractAddendum(Base):
+    __tablename__ = "contract_addenda"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    contract_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("contracts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    number: Mapped[str] = mapped_column(String(120), nullable=False)
+    addendum_date: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[ContractAddendumStatus] = mapped_column(
+        Enum(
+            ContractAddendumStatus,
+            name="contract_addendum_status",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+        default=ContractAddendumStatus.DRAFT,
+        index=True,
+    )
+    amount_delta: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="RUB")
+    new_end_date: Mapped[date | None] = mapped_column(Date)
+    description: Mapped[str | None] = mapped_column(Text)
+    signed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    updated_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
