@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
+from app.modules.comments import repository as comment_repository
+from app.modules.comments.service import CommentService, CommentValidationError
 from app.modules.identity.authorization import (
     AuthorizationContext,
     build_authorization_context,
@@ -23,6 +25,8 @@ from app.modules.tasks.models import Task
 from app.modules.tasks.schemas import (
     TaskAssigneesReplace,
     TaskAssigneesResponse,
+    TaskCommentCreate,
+    TaskCommentResponse,
     TaskCreate,
     TaskLinkResponse,
     TaskPaginatedResponse,
@@ -39,6 +43,7 @@ from app.modules.tasks.service import (
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 service = TaskService()
+comment_service = CommentService()
 
 _dep_create = Depends(require_scoped_permission("tasks.create"))  # noqa: B008
 _dep_edit = Depends(require_scoped_permission("tasks.edit"))  # noqa: B008
@@ -46,6 +51,7 @@ _dep_assign = Depends(require_scoped_permission("tasks.assign"))  # noqa: B008
 _dep_status = Depends(require_scoped_permission("tasks.change_status"))  # noqa: B008
 _dep_delete = Depends(require_scoped_permission("tasks.delete"))  # noqa: B008
 _dep_restore = Depends(require_scoped_permission("tasks.restore"))  # noqa: B008
+_dep_comment = Depends(require_scoped_permission("tasks.comment"))  # noqa: B008
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,6 +196,16 @@ def _task_response(db: Session, task: Task) -> TaskResponse:
         cancelled_at=task.cancelled_at,
         deleted_at=task.deleted_at,
         version=task.version,
+    )
+
+
+def _comment_response(comment) -> TaskCommentResponse:
+    return TaskCommentResponse(
+        id=comment.id,
+        author_employee_id=comment.author_employee_id,
+        text=comment.text,
+        created_at=comment.created_at,
+        updated_at=comment.updated_at,
     )
 
 
@@ -358,6 +374,44 @@ def change_status(
     except TaskValidationError as exc:
         raise _unprocessable(str(exc)) from exc
     return _task_response(db, task)
+
+
+@router.get("/{task_id}/comments", response_model=list[TaskCommentResponse])
+def list_task_comments(
+    task_id: uuid.UUID,
+    access: TaskReadAccess = _dep_read,
+    db: Session = Depends(get_db),
+) -> list[TaskCommentResponse]:
+    _task_for_read_or_404(db, task_id, access)
+    return [
+        _comment_response(comment)
+        for comment in comment_repository.list_task_comments(db, task_id)
+    ]
+
+
+@router.post(
+    "/{task_id}/comments",
+    response_model=TaskCommentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_task_comment(
+    task_id: uuid.UUID,
+    payload: TaskCommentCreate,
+    authorization: AuthorizationContext = _dep_comment,
+    db: Session = Depends(get_db),
+) -> TaskCommentResponse:
+    _task_for_mutation_or_404(db, task_id, authorization)
+    try:
+        comment = comment_service.add_task_comment(
+            db,
+            actor_user_id=authorization.user_id,
+            author_employee_id=authorization.employee_id,
+            task_id=task_id,
+            text=payload.text,
+        )
+    except CommentValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+    return _comment_response(comment)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
