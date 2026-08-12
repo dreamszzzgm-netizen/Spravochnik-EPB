@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.modules.buildings.repository import get_building
 from app.modules.contracts import repository
+from app.modules.contracts.enums import ContractStatus
 from app.modules.contracts.models import Contract, ContractItem
 from app.modules.contracts.schemas import (
     ContractCreate,
@@ -24,6 +25,7 @@ from app.modules.identity.authorization import (
     AuthorizationContext,
     build_authorization_context,
     can_access_building,
+    can_access_contract,
     can_access_technical_device,
     can_reference_organizations,
 )
@@ -48,9 +50,18 @@ def _contract_or_404(
         db,
         contract_id,
         include_deleted=include_deleted,
-        authorization=ctx,
     )
     if contract is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Contract not found",
+        )
+    responsible_employee_ids = repository.get_contract_responsible_ids(db, contract.id)
+    if not can_access_contract(
+        ctx,
+        contract,
+        responsible_employee_ids=responsible_employee_ids,
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Contract not found",
@@ -174,6 +185,8 @@ def _item_response(db: Session, item: ContractItem) -> ContractItemResponse:
 @router.get("", response_model=ContractPaginatedResponse)
 def read_contracts(
     q: str = "",
+    customer_organization_id: uuid.UUID | None = None,
+    contract_status: ContractStatus | None = Query(default=None, alias="status"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     ctx: AuthorizationContext = Depends(require_scoped_permission("contracts.view")),
@@ -182,6 +195,8 @@ def read_contracts(
     items, total = repository.list_contracts_paginated(
         db,
         q=q,
+        customer_organization_id=customer_organization_id,
+        contract_status=contract_status,
         page=page,
         page_size=page_size,
         authorization=ctx,
@@ -335,6 +350,22 @@ def replace_contract_responsibles(
     except ContractValidationError as exc:
         raise _unprocessable(str(exc)) from exc
     return ContractResponsiblesResponse(employee_ids=employee_ids)
+
+
+@router.get(
+    "/{contract_id}/items",
+    response_model=list[ContractItemResponse],
+)
+def read_contract_items(
+    contract_id: uuid.UUID,
+    ctx: AuthorizationContext = Depends(require_scoped_permission("contracts.view")),
+    db: Session = Depends(get_db),
+):
+    contract = _contract_or_404(db, contract_id, ctx=ctx)
+    return [
+        _item_response(db, item)
+        for item in repository.list_contract_items(db, contract.id)
+    ]
 
 
 @router.post(

@@ -3,6 +3,7 @@ import uuid
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from app.modules.contracts.enums import ContractStatus
 from app.modules.contracts.models import (
     Contract,
     ContractItem,
@@ -71,6 +72,8 @@ def list_contracts_paginated(
     db: Session,
     *,
     q: str = "",
+    customer_organization_id: uuid.UUID | None = None,
+    contract_status: ContractStatus | None = None,
     page: int = 1,
     page_size: int = 20,
     authorization: AuthorizationContext | None = None,
@@ -81,6 +84,12 @@ def list_contracts_paginated(
     if q:
         pattern = f"%{q}%"
         stmt = stmt.where(Contract.number.ilike(pattern))
+    if customer_organization_id is not None:
+        stmt = stmt.where(
+            Contract.customer_organization_id == customer_organization_id
+        )
+    if contract_status is not None:
+        stmt = stmt.where(Contract.status == contract_status)
 
     total = db.scalar(sa.select(sa.func.count()).select_from(stmt.subquery())) or 0
     offset = max(0, page - 1) * page_size
