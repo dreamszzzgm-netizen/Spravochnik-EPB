@@ -24,13 +24,15 @@ def _apply_contract_scope(
 
     predicates: list[sa.ColumnElement[bool]] = []
 
-    if ScopeType.RELATED in authorization.active_scope_types:
-        if authorization.related_organization_ids:
-            predicates.append(
-                Contract.customer_organization_id.in_(
-                    authorization.related_organization_ids
-                )
+    if (
+        ScopeType.RELATED in authorization.active_scope_types
+        and authorization.related_organization_ids
+    ):
+        predicates.append(
+            Contract.customer_organization_id.in_(
+                authorization.related_organization_ids
             )
+        )
 
     if ScopeType.OWN in authorization.active_scope_types:
         predicates.append(Contract.created_by == authorization.user_id)
