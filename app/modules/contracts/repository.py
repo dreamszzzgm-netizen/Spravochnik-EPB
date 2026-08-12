@@ -6,9 +6,49 @@ from sqlalchemy.orm import Session
 from app.modules.contracts.models import (
     Contract,
     ContractItem,
+    ContractItemBuilding,
+    ContractItemTechnicalDevice,
     ContractResponsible,
     ExpertiseType,
 )
+from app.modules.identity.authorization import AuthorizationContext
+from app.modules.identity.models import ScopeType
+
+
+def _apply_contract_scope(
+    stmt: sa.Select,
+    authorization: AuthorizationContext | None,
+) -> sa.Select:
+    if authorization is None or authorization.has_all_scope:
+        return stmt
+
+    predicates: list[sa.ColumnElement[bool]] = []
+
+    if ScopeType.RELATED in authorization.active_scope_types:
+        if authorization.related_organization_ids:
+            predicates.append(
+                Contract.customer_organization_id.in_(
+                    authorization.related_organization_ids
+                )
+            )
+
+    if ScopeType.OWN in authorization.active_scope_types:
+        predicates.append(Contract.created_by == authorization.user_id)
+
+    if ScopeType.ASSIGNED in authorization.active_scope_types:
+        predicates.append(
+            sa.exists(
+                sa.select(1).where(
+                    ContractResponsible.contract_id == Contract.id,
+                    ContractResponsible.employee_id == authorization.employee_id,
+                )
+            )
+        )
+
+    if not predicates:
+        return stmt.where(sa.false())
+
+    return stmt.where(sa.or_(*predicates))
 
 
 def get_contract(
@@ -16,11 +56,44 @@ def get_contract(
     contract_id: uuid.UUID,
     *,
     include_deleted: bool = False,
+    authorization: AuthorizationContext | None = None,
 ) -> Contract | None:
     stmt = sa.select(Contract).where(Contract.id == contract_id)
     if not include_deleted:
         stmt = stmt.where(Contract.deleted_at.is_(None))
+    stmt = _apply_contract_scope(stmt, authorization)
     return db.scalar(stmt)
+
+
+def list_contracts_paginated(
+    db: Session,
+    *,
+    q: str = "",
+    page: int = 1,
+    page_size: int = 20,
+    authorization: AuthorizationContext | None = None,
+) -> tuple[list[Contract], int]:
+    stmt = sa.select(Contract).where(Contract.deleted_at.is_(None))
+    stmt = _apply_contract_scope(stmt, authorization)
+
+    if q:
+        pattern = f"%{q}%"
+        stmt = stmt.where(Contract.number.ilike(pattern))
+
+    total = db.scalar(sa.select(sa.func.count()).select_from(stmt.subquery())) or 0
+    offset = max(0, page - 1) * page_size
+    items = list(
+        db.scalars(
+            stmt.order_by(
+                Contract.contract_date.desc(),
+                Contract.number.asc(),
+                Contract.id.asc(),
+            )
+            .offset(offset)
+            .limit(min(page_size, 100))
+        ).all()
+    )
+    return items, total
 
 
 def get_contract_item(
@@ -60,6 +133,27 @@ def list_contract_items(
         stmt = stmt.where(ContractItem.deleted_at.is_(None))
     stmt = stmt.order_by(ContractItem.created_at.asc(), ContractItem.id.asc())
     return list(db.scalars(stmt).all())
+
+
+def get_contract_item_subject_ids(
+    db: Session,
+    item_id: uuid.UUID,
+) -> tuple[list[uuid.UUID], list[uuid.UUID]]:
+    technical_device_ids = list(
+        db.scalars(
+            sa.select(ContractItemTechnicalDevice.technical_device_id)
+            .where(ContractItemTechnicalDevice.contract_item_id == item_id)
+            .order_by(ContractItemTechnicalDevice.technical_device_id.asc())
+        ).all()
+    )
+    building_ids = list(
+        db.scalars(
+            sa.select(ContractItemBuilding.building_id)
+            .where(ContractItemBuilding.contract_item_id == item_id)
+            .order_by(ContractItemBuilding.building_id.asc())
+        ).all()
+    )
+    return technical_device_ids, building_ids
 
 
 def get_active_expertise_type(db: Session, expertise_type_id: uuid.UUID) -> ExpertiseType | None:
