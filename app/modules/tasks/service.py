@@ -29,6 +29,12 @@ from app.modules.tasks.models import (
 from app.modules.technical_devices.models import TechnicalDevice
 
 
+TASK_TRANSITIONS: dict[TaskStatus, set[TaskStatus]] = {
+    TaskStatus.NEW: {TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED},
+    TaskStatus.IN_PROGRESS: {TaskStatus.COMPLETED, TaskStatus.CANCELLED},
+}
+
+
 class TaskNotFoundError(Exception):
     pass
 
@@ -42,6 +48,14 @@ class TaskLinkInput:
     kind: TaskLinkKind
     entity_id: uuid.UUID
     is_primary: bool = False
+
+
+def is_task_overdue(task: Task, *, today: date) -> bool:
+    return (
+        task.due_date is not None
+        and task.due_date < today
+        and task.status not in {TaskStatus.COMPLETED, TaskStatus.CANCELLED}
+    )
 
 
 class TaskService:
@@ -257,6 +271,50 @@ class TaskService:
             db.rollback()
             raise
         return normalized
+
+    def change_status(
+        self,
+        db: Session,
+        *,
+        actor_user_id: uuid.UUID,
+        task: Task,
+        target_status: TaskStatus,
+    ) -> Task:
+        self._require_active_task(task)
+        source_status = task.status
+        if target_status not in TASK_TRANSITIONS.get(source_status, set()):
+            raise TaskValidationError(
+                f"Переход задачи {source_status.value} -> {target_status.value} недопустим"
+            )
+
+        now = datetime.now(UTC)
+        if target_status == TaskStatus.COMPLETED:
+            task.completed_at = now
+        elif target_status == TaskStatus.CANCELLED:
+            task.cancelled_at = now
+        task.status = target_status
+        task.version += 1
+        try:
+            db.flush()
+            write_audit(
+                db,
+                user_id=actor_user_id,
+                action="task.status_changed",
+                entity_type="task",
+                entity_id=task.id,
+                summary=(
+                    f"Статус задачи {task.title}: "
+                    f"{source_status.value} -> {target_status.value}"
+                ),
+                result="success",
+                metadata={"from": source_status.value, "to": target_status.value},
+            )
+            db.commit()
+            db.refresh(task)
+        except Exception:
+            db.rollback()
+            raise
+        return task
 
     @staticmethod
     def _require_active_task(task: Task) -> None:
