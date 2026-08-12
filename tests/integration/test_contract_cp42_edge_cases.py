@@ -46,12 +46,13 @@ def _organization(db: Session, name: str) -> Organization:
 
 
 def _user(db: Session, username: str) -> User:
-    employee = Employee(full_name=f"{username} Employee")
+    normalized_username = username.strip().lower()
+    employee = Employee(full_name=f"{normalized_username} Employee")
     db.add(employee)
     db.flush()
     user = User(
         employee_id=employee.id,
-        username=username,
+        username=normalized_username,
         password_hash=hash_password("test-password-123!"),
         is_active=True,
         is_superuser=False,
