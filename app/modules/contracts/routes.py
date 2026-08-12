@@ -1,4 +1,5 @@
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
@@ -186,7 +187,10 @@ def _item_response(db: Session, item: ContractItem) -> ContractItemResponse:
 def read_contracts(
     q: str = "",
     customer_organization_id: uuid.UUID | None = None,
-    contract_status: ContractStatus | None = Query(default=None, alias="status"),
+    contract_status: Annotated[
+        ContractStatus | None,
+        Query(alias="status"),
+    ] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     ctx: AuthorizationContext = Depends(require_scoped_permission("contracts.view")),
