@@ -34,9 +34,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_pg)
 
 
-# ---------------------------------------------------------------------------
-# Session-scoped fixture: ensure the test DB is at the latest migration
-# ---------------------------------------------------------------------------
 @pytest.fixture(scope="session", autouse=True)
 def _ensure_migrations():
     if not os.getenv("TEST_DATABASE_URL"):
@@ -64,9 +61,21 @@ def _ensure_migrations():
     command.upgrade(alembic_cfg, "head")
 
 
-# ---------------------------------------------------------------------------
-# Общие фикстуры для HTTP-интеграционных тестов (используют TestClient)
-# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _restore_migration_head_after_test(request: pytest.FixtureRequest):
+    """Migration tests must never leave the shared integration DB below head."""
+    yield
+    if not os.getenv("TEST_DATABASE_URL") or "migration" not in request.node.name.lower():
+        return
+
+    from alembic.config import Config
+
+    from alembic import command
+
+    alembic_cfg = Config("alembic.ini")
+    alembic_cfg.set_main_option("sqlalchemy.url", os.environ["TEST_DATABASE_URL"])
+    command.upgrade(alembic_cfg, "head")
+
 
 @pytest.fixture()
 def db_session() -> Generator[Session, None, None]:
@@ -76,6 +85,11 @@ def db_session() -> Generator[Session, None, None]:
         connection.execute(
             text("""
             TRUNCATE TABLE
+                comment_tasks,
+                task_assignees,
+                task_organizations, task_contracts, task_contract_items,
+                task_technical_devices, task_buildings, task_opos,
+                comments, tasks,
                 audit_events,
                 contract_item_technical_devices, contract_item_buildings,
                 contract_items, contract_responsibles, contracts,
@@ -127,7 +141,6 @@ def test_user(db_session: Session) -> dict[str, object]:
     db_session.add(user)
     db_session.flush()
 
-    # Назначаем роль с разрешением organizations.view
     role = Role(code="test-org-viewer", name="Test Org Viewer")
     db_session.add(role)
     db_session.flush()

@@ -74,6 +74,10 @@ class ContractLike(Protocol):
     created_by: uuid.UUID
 
 
+class TaskLike(Protocol):
+    creator_employee_id: uuid.UUID
+
+
 @dataclass(frozen=True, slots=True)
 class AuthorizationContext:
     user_id: uuid.UUID
@@ -215,6 +219,32 @@ def can_access_contract(
         or (
             ScopeType.OWN in ctx.active_scope_types
             and contract.created_by == ctx.user_id
+        )
+    )
+
+
+def can_access_task(
+    ctx: AuthorizationContext,
+    task: TaskLike,
+    *,
+    assignee_employee_ids: set[uuid.UUID],
+    related_organization_ids: set[uuid.UUID],
+) -> bool:
+    if ctx.has_all_scope:
+        return True
+
+    return (
+        (
+            ScopeType.ASSIGNED in ctx.active_scope_types
+            and ctx.employee_id in assignee_employee_ids
+        )
+        or (
+            ScopeType.OWN in ctx.active_scope_types
+            and ctx.employee_id == task.creator_employee_id
+        )
+        or (
+            ScopeType.RELATED in ctx.active_scope_types
+            and bool(ctx.related_organization_ids & related_organization_ids)
         )
     )
 
