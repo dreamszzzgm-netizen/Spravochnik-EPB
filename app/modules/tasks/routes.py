@@ -22,6 +22,10 @@ from app.modules.identity.repository import get_active_permission_scope_grants
 from app.modules.tasks import repository
 from app.modules.tasks.enums import TaskPriority, TaskStatus
 from app.modules.tasks.models import Task
+from app.modules.tasks.reference_access import (
+    TaskReferenceAccessError,
+    require_task_link_reference_access,
+)
 from app.modules.tasks.schemas import (
     TaskAssigneesReplace,
     TaskAssigneesResponse,
@@ -174,6 +178,21 @@ def _link_inputs(payloads) -> list[TaskLinkInput]:
     ]
 
 
+def _require_link_access_or_404(
+    db: Session,
+    authorization: AuthorizationContext,
+    links: list[TaskLinkInput],
+) -> None:
+    try:
+        require_task_link_reference_access(
+            db,
+            actor_authorization=authorization,
+            links=links,
+        )
+    except TaskReferenceAccessError as exc:
+        raise _not_found() from exc
+
+
 def _task_response(db: Session, task: Task) -> TaskResponse:
     return TaskResponse(
         id=task.id,
@@ -261,6 +280,8 @@ def create_task(
     authorization: AuthorizationContext = _dep_create,
     db: Session = Depends(get_db),
 ) -> TaskResponse:
+    links = _link_inputs(payload.links)
+    _require_link_access_or_404(db, authorization, links)
     try:
         task = service.create_task(
             db,
@@ -272,7 +293,7 @@ def create_task(
             priority=payload.priority,
             is_personal=payload.is_personal,
             assignee_ids=[],
-            links=_link_inputs(payload.links),
+            links=links,
         )
     except TaskValidationError as exc:
         raise _unprocessable(str(exc)) from exc
@@ -310,6 +331,11 @@ def update_task(
         TaskLinkInput(kind=kind, entity_id=entity_id, is_primary=is_primary)
         for kind, entity_id, is_primary in repository.get_task_links(db, task.id)
     ]
+    new_links = None
+    if "links" in fields:
+        new_links = _link_inputs(payload.links or [])
+        _require_link_access_or_404(db, authorization, new_links)
+
     try:
         task = service.update_task(
             db,
@@ -324,11 +350,7 @@ def update_task(
             is_personal=(
                 payload.is_personal if "is_personal" in fields else task.is_personal
             ),
-            links=(
-                _link_inputs(payload.links or [])
-                if "links" in fields
-                else current_links
-            ),
+            links=new_links if new_links is not None else current_links,
             due_date_change_reason=payload.due_date_change_reason,
         )
     except TaskValidationError as exc:
