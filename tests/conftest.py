@@ -34,9 +34,6 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(skip_pg)
 
 
-# ---------------------------------------------------------------------------
-# Session-scoped fixture: ensure the test DB is at the latest migration
-# ---------------------------------------------------------------------------
 @pytest.fixture(scope="session", autouse=True)
 def _ensure_migrations():
     if not os.getenv("TEST_DATABASE_URL"):
@@ -64,10 +61,6 @@ def _ensure_migrations():
     command.upgrade(alembic_cfg, "head")
 
 
-# ---------------------------------------------------------------------------
-# Общие фикстуры для HTTP-интеграционных тестов (используют TestClient)
-# ---------------------------------------------------------------------------
-
 @pytest.fixture()
 def db_session() -> Generator[Session, None, None]:
     """Session SQLAlchemy, управляющая транзакцией в тестовой БД."""
@@ -76,6 +69,11 @@ def db_session() -> Generator[Session, None, None]:
         connection.execute(
             text("""
             TRUNCATE TABLE
+                comment_tasks,
+                task_assignees,
+                task_organizations, task_contracts, task_contract_items,
+                task_technical_devices, task_buildings, task_opos,
+                comments, tasks,
                 audit_events,
                 contract_item_technical_devices, contract_item_buildings,
                 contract_items, contract_responsibles, contracts,
@@ -127,7 +125,6 @@ def test_user(db_session: Session) -> dict[str, object]:
     db_session.add(user)
     db_session.flush()
 
-    # Назначаем роль с разрешением organizations.view
     role = Role(code="test-org-viewer", name="Test Org Viewer")
     db_session.add(role)
     db_session.flush()
