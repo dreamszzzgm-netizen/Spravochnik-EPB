@@ -61,6 +61,7 @@ class TaskService:
     ) -> Task:
         clean_title = self._clean_title(title)
         clean_description = self._clean_optional_text(description)
+        self._require_active_employee(db, creator_employee_id, label="постановщик")
         normalized_assignees = self._validate_assignees(db, assignee_ids)
         normalized_links = self._validate_links(db, links, is_personal=is_personal)
 
@@ -276,23 +277,31 @@ class TaskService:
         clean = value.strip()
         return clean or None
 
+    @staticmethod
+    def _require_active_employee(
+        db: Session,
+        employee_id: uuid.UUID,
+        *,
+        label: str,
+    ) -> Employee:
+        employee = db.scalar(
+            select(Employee).where(
+                Employee.id == employee_id,
+                Employee.deleted_at.is_(None),
+            )
+        )
+        if employee is None:
+            raise TaskValidationError(f"Недоступен {label} задачи")
+        return employee
+
     def _validate_assignees(
         self,
         db: Session,
         employee_ids: Iterable[uuid.UUID],
     ) -> list[uuid.UUID]:
         normalized = sorted(set(employee_ids), key=str)
-        if not normalized:
-            return []
-        employees = db.scalars(
-            select(Employee).where(Employee.id.in_(normalized))
-        ).all()
-        by_id = {employee.id: employee for employee in employees}
-        if any(
-            employee_id not in by_id or by_id[employee_id].deleted_at is not None
-            for employee_id in normalized
-        ):
-            raise TaskValidationError("Один или несколько исполнителей недоступны")
+        for employee_id in normalized:
+            self._require_active_employee(db, employee_id, label="исполнитель")
         return normalized
 
     def _validate_links(
