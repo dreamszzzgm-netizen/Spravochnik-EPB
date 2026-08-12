@@ -10,6 +10,7 @@ from app.modules.contracts.models import (
     ContractItemBuilding,
     ContractItemTechnicalDevice,
     ContractResponsible,
+    ContractSuspension,
     ExpertiseType,
 )
 from app.modules.identity.authorization import AuthorizationContext
@@ -79,6 +80,34 @@ def get_contract_for_update(
             Contract.deleted_at.is_(None),
         )
         .with_for_update()
+    )
+
+
+def get_open_contract_suspension(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> ContractSuspension | None:
+    return db.scalar(
+        sa.select(ContractSuspension).where(
+            ContractSuspension.contract_id == contract_id,
+            ContractSuspension.ended_at.is_(None),
+        )
+    )
+
+
+def list_contract_suspensions(
+    db: Session,
+    contract_id: uuid.UUID,
+) -> list[ContractSuspension]:
+    return list(
+        db.scalars(
+            sa.select(ContractSuspension)
+            .where(ContractSuspension.contract_id == contract_id)
+            .order_by(
+                ContractSuspension.started_at.asc(),
+                ContractSuspension.id.asc(),
+            )
+        ).all()
     )
 
 
