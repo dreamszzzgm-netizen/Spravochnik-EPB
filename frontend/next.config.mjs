@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: "standalone",
   // Performance optimizations
   env: {
     NEXT_TELEMETRY_DISABLED: "1",
