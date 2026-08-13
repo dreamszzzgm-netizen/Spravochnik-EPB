@@ -71,7 +71,7 @@ def test_parser_extracts_legal_entity_requisites_without_ip_fields() -> None:
     }
 
 
-def test_legal_form_module_contract_is_available() -> None:
-    from app.modules.organizations.legal_form import validate_organization_legal_form
+def test_legal_form_validation_contract_is_available() -> None:
+    from app.modules.organizations.service import validate_organization_legal_form
 
     assert callable(validate_organization_legal_form)
