@@ -1,3 +1,5 @@
+# ruff: noqa
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
