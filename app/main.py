@@ -10,6 +10,7 @@ from app.modules.custom_fields.routes import router as custom_fields_router
 from app.modules.identity.routes import router as identity_router
 from app.modules.opo.reference_routes import router as reference_router
 from app.modules.opo.routes import router as opo_router
+from app.modules.organizations.import_routes import router as organization_import_router
 from app.modules.organizations.routes import router as organizations_router
 from app.modules.tasks.routes import router as tasks_router
 from app.modules.technical_devices.routes import router as technical_devices_router
@@ -28,6 +29,7 @@ app = FastAPI(
 app.add_middleware(RequestContextMiddleware)
 app.include_router(health_router)
 app.include_router(identity_router)
+app.include_router(organization_import_router)
 app.include_router(organizations_router)
 app.include_router(opo_router)
 app.include_router(technical_devices_router)
