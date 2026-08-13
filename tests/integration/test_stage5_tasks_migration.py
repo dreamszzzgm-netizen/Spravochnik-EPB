@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, inspect, text
 
 pytestmark = pytest.mark.integration
 
-LATEST_HEAD = "0016_documents"
+LATEST_HEAD = "0017_expertises"
 CURRENT_HEAD = "0013_stage5_tasks_core"
 PARENT_HEAD = "0012_stage4_contract_lifecycle"
 EXPECTED_TABLES = {
