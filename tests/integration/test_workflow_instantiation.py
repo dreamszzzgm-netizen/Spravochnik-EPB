@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
@@ -107,6 +107,14 @@ def _organization(db: Session) -> Organization:
     return organization
 
 
+def _organization_link(organization: Organization) -> TaskLinkInput:
+    return TaskLinkInput(
+        kind=TaskLinkKind.ORGANIZATION,
+        entity_id=organization.id,
+        is_primary=True,
+    )
+
+
 def test_instantiate_creates_normal_tasks_with_exact_workflow_provenance(
     db_session: Session,
 ) -> None:
@@ -129,13 +137,7 @@ def test_instantiate_creates_normal_tasks_with_exact_workflow_provenance(
         creator_employee_id=creator.id,
         template_id=workflow.id,
         anchor_date=anchor,
-        links=[
-            TaskLinkInput(
-                kind=TaskLinkKind.ORGANIZATION,
-                entity_id=organization.id,
-                is_primary=True,
-            )
-        ],
+        links=[_organization_link(organization)],
         due_date_resolver=lambda start, days: start + timedelta(days=days),
     )
 
@@ -143,13 +145,19 @@ def test_instantiate_creates_normal_tasks_with_exact_workflow_provenance(
         "First generated task",
         "Second generated task",
     ]
-    assert [task.due_date for task in tasks] == [anchor + timedelta(days=2), anchor + timedelta(days=5)]
+    assert [task.due_date for task in tasks] == [
+        anchor + timedelta(days=2),
+        anchor + timedelta(days=5),
+    ]
     templates = db_session.scalars(
         select(WorkflowTaskTemplate)
         .where(WorkflowTaskTemplate.workflow_template_version_id == version.id)
         .order_by(WorkflowTaskTemplate.sort_order)
     ).all()
-    assert [task.source_workflow_template_version_id for task in tasks] == [version.id, version.id]
+    assert [task.source_workflow_template_version_id for task in tasks] == [
+        version.id,
+        version.id,
+    ]
     assert [task.source_workflow_task_template_id for task in tasks] == [
         templates[0].id,
         templates[1].id,
@@ -182,7 +190,7 @@ def test_instantiate_excludes_absent_and_deleted_employees(db_session: Session) 
             created_by=actor.id,
         )
     )
-    deleted.deleted_at = __import__("datetime").datetime.now(__import__("datetime").UTC)
+    deleted.deleted_at = datetime.now(UTC)
     db_session.commit()
     workflow, _ = _published_workflow(db_session, actor, role)
     organization = _organization(db_session)
@@ -193,7 +201,7 @@ def test_instantiate_excludes_absent_and_deleted_employees(db_session: Session) 
         creator_employee_id=creator.id,
         template_id=workflow.id,
         anchor_date=anchor,
-        links=[TaskLinkInput(kind=TaskLinkKind.ORGANIZATION, entity_id=organization.id, is_primary=True)],
+        links=[_organization_link(organization)],
         due_date_resolver=lambda start, days: start + timedelta(days=days),
     )
 
@@ -219,7 +227,7 @@ def test_instantiate_fails_closed_when_no_eligible_assignee(db_session: Session)
             creator_employee_id=creator.id,
             template_id=workflow.id,
             anchor_date=date(2026, 8, 13),
-            links=[TaskLinkInput(kind=TaskLinkKind.ORGANIZATION, entity_id=organization.id, is_primary=True)],
+            links=[_organization_link(organization)],
             due_date_resolver=lambda start, days: start + timedelta(days=days),
         )
 
@@ -227,7 +235,9 @@ def test_instantiate_fails_closed_when_no_eligible_assignee(db_session: Session)
     assert after == before
 
 
-def test_instantiate_rolls_back_all_generated_tasks_on_late_failure(db_session: Session) -> None:
+def test_instantiate_rolls_back_all_generated_tasks_on_late_failure(
+    db_session: Session,
+) -> None:
     from app.modules.workflows.service import WorkflowService
 
     actor, creator = _actor(db_session, "rollback")
@@ -256,7 +266,7 @@ def test_instantiate_rolls_back_all_generated_tasks_on_late_failure(db_session: 
             creator_employee_id=creator.id,
             template_id=workflow.id,
             anchor_date=date(2026, 8, 13),
-            links=[TaskLinkInput(kind=TaskLinkKind.ORGANIZATION, entity_id=organization.id, is_primary=True)],
+            links=[_organization_link(organization)],
             due_date_resolver=resolver,
         )
 
