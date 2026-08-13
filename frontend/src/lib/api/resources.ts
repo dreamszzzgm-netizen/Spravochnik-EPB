@@ -59,6 +59,16 @@ export const previewOrganizationImport = (text: string) =>
     body: JSON.stringify({ text }),
   });
 
+export const previewOrganizationImportFile = (file: File, options: ResourceOptions = {}) => {
+  const form = new FormData();
+  form.append("file", file);
+  return apiRequest<OrganizationImportPreviewResponse>("/api/organizations/import-file-preview", {
+    method: "POST",
+    body: form,
+    signal: options.signal,
+  });
+};
+
 export const getOrganization = (id: string, options: ResourceOptions = {}) =>
   apiRequest<OrganizationResponse>(`/api/organizations/${id}`, options);
 
