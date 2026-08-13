@@ -1,8 +1,8 @@
 """Application service for workflow template configuration."""
 
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-import uuid
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
