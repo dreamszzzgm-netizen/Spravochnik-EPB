@@ -58,47 +58,59 @@ export interface OrganizationContactCreatePayload {
   is_primary: boolean;
 }
 
-export interface OrganizationCreatePayload {
-  legal_name: string;
-  short_name: string | null;
-  organization_type: OrganizationType;
+export interface OrganizationProfileFields {
   legal_address: string | null;
   actual_address: string | null;
+  residence_address: string | null;
   director_name: string | null;
   phone: string | null;
   email: string | null;
+  passport_series: string | null;
+  passport_number: string | null;
+  passport_issued_by: string | null;
+  passport_issue_date: string | null;
+  passport_department_code: string | null;
+  bank_name: string | null;
+  bank_bik: string | null;
+  bank_account: string | null;
+  correspondent_account: string | null;
+}
+
+export interface OrganizationCreatePayload extends OrganizationProfileFields {
+  legal_name: string;
+  short_name: string | null;
+  organization_type: OrganizationType;
   comment: string | null;
   identifiers: OrganizationIdentifierCreate[];
 }
 
-export interface OrganizationUpdatePayload {
+export interface OrganizationUpdatePayload extends Partial<OrganizationProfileFields> {
   legal_name?: string | null;
   short_name?: string | null;
   organization_type?: OrganizationType | null;
-  legal_address?: string | null;
-  actual_address?: string | null;
-  director_name?: string | null;
-  phone?: string | null;
-  email?: string | null;
   comment?: string | null;
   identifiers?: OrganizationIdentifierCreate[] | null;
 }
 
-export interface OrganizationResponse {
+export interface OrganizationResponse extends OrganizationProfileFields {
   id: string;
   organization_type: OrganizationType;
   legal_name: string;
   short_name: string | null;
-  legal_address: string | null;
-  actual_address: string | null;
-  director_name: string | null;
-  phone: string | null;
-  email: string | null;
   comment: string | null;
   parent_id: string | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface OrganizationImportCandidate extends OrganizationProfileFields {
+  organization_type: OrganizationType | null;
+  legal_name: string | null;
+  short_name: string | null;
+  identifiers: Partial<Record<IdentifierType, string>>;
+  requires_review: boolean;
+  warnings: string[];
 }
 
 export interface OrganizationPaginatedResponse {
