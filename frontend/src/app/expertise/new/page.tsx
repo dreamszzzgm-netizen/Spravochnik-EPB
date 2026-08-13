@@ -72,16 +72,18 @@ export default function NewExpertisePage() {
   }, []);
 
   useEffect(() => {
-    if (!contractId) {
-      setItems([]);
-      setSelectedItemIds([]);
-      return;
-    }
     const controller = new AbortController();
-    listContractItems(contractId, { signal: controller.signal })
-      .then(setItems)
-      .catch(() => {});
-    setSelectedItemIds([]);
+    queueMicrotask(() => {
+      if (!contractId) {
+        setItems([]);
+        setSelectedItemIds([]);
+        return;
+      }
+      setSelectedItemIds([]);
+      listContractItems(contractId, { signal: controller.signal })
+        .then(setItems)
+        .catch(() => {});
+    });
     return () => controller.abort();
   }, [contractId]);
 
