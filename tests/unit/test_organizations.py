@@ -5,10 +5,6 @@ from app.modules.organizations.authorization import (
     can_manage_organization,
     evaluate_organization_scope,
 )
-from app.modules.organizations.legal_form import (
-    OrganizationLegalFormError,
-    validate_organization_legal_form,
-)
 from app.modules.organizations.models import (
     IdentifierType,
     OrganizationType,
@@ -20,7 +16,9 @@ from app.modules.organizations.schemas import (
 )
 from app.modules.organizations.service import (
     OrganizationConflictError,
+    OrganizationLegalFormError,
     OrganizationNotFoundError,
+    validate_organization_legal_form,
 )
 
 
