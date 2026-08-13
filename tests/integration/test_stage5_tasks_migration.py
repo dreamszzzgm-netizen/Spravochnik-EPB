@@ -117,9 +117,13 @@ def test_stage5_postgres_enums_are_exact() -> None:
 
 def test_stage5_migration_round_trip() -> None:
     database_url = _database_url()
-    assert _current_revision(database_url) == CURRENT_HEAD
 
     try:
+        # Newer feature branches may legitimately advance Alembic past CP5.1.
+        # Move explicitly to the revision under test instead of assuming it is global head.
+        _run_alembic("downgrade", CURRENT_HEAD)
+        assert _current_revision(database_url) == CURRENT_HEAD
+
         _run_alembic("downgrade", PARENT_HEAD)
         assert _current_revision(database_url) == PARENT_HEAD
 
