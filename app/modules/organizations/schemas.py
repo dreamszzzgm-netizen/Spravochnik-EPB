@@ -17,7 +17,9 @@ class OrganizationBase(BaseModel):
     parent_id: uuid.UUID | None = None
     legal_address: str | None = Field(default=None, max_length=500)
     actual_address: str | None = Field(default=None, max_length=500)
+    residence_address: str | None = Field(default=None, max_length=500)
     director_name: str | None = Field(default=None, max_length=255)
+    passport_details: str | None = Field(default=None, max_length=2000)
     phone: str | None = Field(default=None, max_length=64)
     email: str | None = Field(default=None, max_length=320)
     comment: str | None = None
@@ -34,7 +36,9 @@ class OrganizationUpdate(BaseModel):
     parent_id: uuid.UUID | None = None
     legal_address: str | None = Field(default=None, max_length=500)
     actual_address: str | None = Field(default=None, max_length=500)
+    residence_address: str | None = Field(default=None, max_length=500)
     director_name: str | None = Field(default=None, max_length=255)
+    passport_details: str | None = Field(default=None, max_length=2000)
     phone: str | None = Field(default=None, max_length=64)
     email: str | None = Field(default=None, max_length=320)
     comment: str | None = None
@@ -49,7 +53,9 @@ class OrganizationResponse(BaseModel):
     short_name: str | None
     legal_address: str | None
     actual_address: str | None
+    residence_address: str | None
     director_name: str | None
+    passport_details: str | None
     phone: str | None
     email: str | None
     comment: str | None
