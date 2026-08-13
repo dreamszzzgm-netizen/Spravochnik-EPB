@@ -94,7 +94,7 @@ def test_legal_form_validation_contract_is_available() -> None:
 
 def test_local_file_import_extracts_txt_docx_and_xlsx() -> None:
     assert "ООО Тест" in extract_local_import_text(
-        "card.txt", "text/plain", "ООО Тест\nИНН: 7701234567".encode("utf-8")
+        "card.txt", "text/plain", "ООО Тест\nИНН: 7701234567".encode()
     )
 
     docx = _office_zip(
