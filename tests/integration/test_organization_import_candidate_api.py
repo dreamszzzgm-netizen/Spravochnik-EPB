@@ -1,5 +1,3 @@
-# ruff: noqa
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -49,7 +47,7 @@ def test_import_candidate_does_not_create_organization(
     assert payload["legal_name"] == "Иванов Иван Иванович"
     assert payload["identifiers"]["inn"] == "123456789012"
     assert payload["identifiers"]["ogrnip"] == "321123456789012"
-    assert payload["requires_review"] is True
+    assert payload["requires_review"]
     assert after == before
 
 
