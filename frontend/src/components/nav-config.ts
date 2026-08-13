@@ -49,6 +49,12 @@ export const mainNav: NavItem[] = [
     description: "Мои задачи и рабочие процессы",
   },
   {
+    href: "/reports",
+    label: "Отчёты",
+    icon: FileText,
+    description: "Управленческая отчётность и контроль",
+  },
+  {
     href: "/npd",
     label: "НПД",
     icon: BookOpen,
