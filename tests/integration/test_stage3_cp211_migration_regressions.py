@@ -12,7 +12,7 @@ from alembic import command
 pytestmark = pytest.mark.integration
 
 STAGE3_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
-CURRENT_HEAD = "0015_org_legal_form_fields"
+CURRENT_HEAD = "0016_documents"
 
 
 def _config() -> Config:

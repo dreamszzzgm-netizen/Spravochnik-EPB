@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Building2, Loader2, Pencil } from "lucide-react";
+import { ArrowLeft, Building2, FileText, Loader2, Pencil } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -79,14 +79,22 @@ export default function OrganizationWorkspacePage() {
             </p>
           </div>
         </div>
-        {canEdit && (
-          <Button variant="outline" size="sm" asChild className="ml-auto">
+        <div className="ml-auto flex gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/organizations/${id}/documents`}>
+              <FileText className="mr-1.5 h-4 w-4" />
+              Документы
+            </Link>
+          </Button>
+          {canEdit && (
+          <Button variant="outline" size="sm" asChild>
             <Link href={`/organizations/${id}/edit`}>
               <Pencil className="mr-1.5 h-4 w-4" />
               Редактировать
             </Link>
           </Button>
-        )}
+          )}
+        </div>
       </div>
 
       <Tabs defaultValue="general">

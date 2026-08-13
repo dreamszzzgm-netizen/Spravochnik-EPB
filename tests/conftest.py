@@ -85,6 +85,7 @@ def db_session() -> Generator[Session, None, None]:
         connection.execute(
             text("""
             TRUNCATE TABLE
+                organization_documents, document_requirements,
                 comment_tasks,
                 task_assignees,
                 task_organizations, task_contracts, task_contract_items,
