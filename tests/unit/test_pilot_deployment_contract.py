@@ -93,6 +93,12 @@ def test_real_pilot_secrets_and_data_are_gitignored() -> None:
     assert "var/pilot/backups/" in gitignore
 
 
+def test_shell_scripts_are_checked_out_with_unix_line_endings() -> None:
+    gitattributes = _read(".gitattributes")
+
+    assert "*.sh text eol=lf" in gitattributes
+
+
 def test_runbook_contains_required_safety_guards() -> None:
     runbook = _read("docs/PILOT_DEPLOYMENT.md")
 
