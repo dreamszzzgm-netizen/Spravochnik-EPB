@@ -13,6 +13,7 @@ import type {
   OrganizationContactResponse,
   OrganizationCreatePayload,
   OrganizationIdentifierResponse,
+  OrganizationImportCandidate,
   OrganizationPaginatedResponse,
   OrganizationResponse,
   OrganizationUpdatePayload,
@@ -60,6 +61,15 @@ export const updateOrganization = (id: string, payload: OrganizationUpdatePayloa
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+
+export const getOrganizationImportCandidate = (file: File) => {
+  const body = new FormData();
+  body.append("file", file);
+  return apiRequest<OrganizationImportCandidate>("/api/organizations/import-candidate", {
+    method: "POST",
+    body,
+  });
+};
 
 export const getOrganizationIdentifiers = (id: string, options: ResourceOptions = {}) =>
   apiRequest<OrganizationIdentifierResponse[]>(`/api/organizations/${id}/identifiers`, options);
