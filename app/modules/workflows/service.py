@@ -64,11 +64,12 @@ class WorkflowService:
         db.flush()
         write_audit(
             db,
-            actor_user_id=actor_user_id,
+            user_id=actor_user_id,
             action="workflow.template_created",
             entity_type="workflow_template",
             entity_id=workflow.id,
             summary=f"Создан workflow-шаблон {workflow.name}",
+            result="success",
             metadata={"code": workflow.code},
         )
         try:
@@ -93,7 +94,7 @@ class WorkflowService:
 
         orders = [step.sort_order for step in steps]
         if len(orders) != len(set(orders)):
-            raise WorkflowValidationError("Порядок задач workflow должен быть уникальным")
+            raise WorkflowValidationError("Нарушен порядок задач workflow: значения должны быть уникальны")
         if any(step.sort_order < 0 for step in steps):
             raise WorkflowValidationError("Порядок задач workflow не может быть отрицательным")
         if any(step.relative_due_days < 0 for step in steps):
@@ -135,11 +136,12 @@ class WorkflowService:
         db.flush()
         write_audit(
             db,
-            actor_user_id=actor_user_id,
+            user_id=actor_user_id,
             action="workflow.version_created",
             entity_type="workflow_template_version",
             entity_id=version.id,
             summary=f"Создана версия workflow {version.version_number}",
+            result="success",
             metadata={
                 "workflow_template_id": str(workflow.id),
                 "version_number": version.version_number,
@@ -177,11 +179,12 @@ class WorkflowService:
         version.published_at = datetime.now(UTC)
         write_audit(
             db,
-            actor_user_id=actor_user_id,
+            user_id=actor_user_id,
             action="workflow.version_published",
             entity_type="workflow_template_version",
             entity_id=version.id,
             summary=f"Опубликована версия workflow {version.version_number}",
+            result="success",
             metadata={
                 "workflow_template_id": str(workflow.id),
                 "version_number": version.version_number,
