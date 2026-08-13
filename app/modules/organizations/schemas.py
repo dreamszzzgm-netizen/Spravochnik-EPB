@@ -17,7 +17,9 @@ class OrganizationBase(BaseModel):
     parent_id: uuid.UUID | None = None
     legal_address: str | None = Field(default=None, max_length=500)
     actual_address: str | None = Field(default=None, max_length=500)
+    residence_address: str | None = Field(default=None, max_length=500)
     director_name: str | None = Field(default=None, max_length=255)
+    passport_details: str | None = Field(default=None, max_length=2000)
     phone: str | None = Field(default=None, max_length=64)
     email: str | None = Field(default=None, max_length=320)
     comment: str | None = None
@@ -34,7 +36,9 @@ class OrganizationUpdate(BaseModel):
     parent_id: uuid.UUID | None = None
     legal_address: str | None = Field(default=None, max_length=500)
     actual_address: str | None = Field(default=None, max_length=500)
+    residence_address: str | None = Field(default=None, max_length=500)
     director_name: str | None = Field(default=None, max_length=255)
+    passport_details: str | None = Field(default=None, max_length=2000)
     phone: str | None = Field(default=None, max_length=64)
     email: str | None = Field(default=None, max_length=320)
     comment: str | None = None
@@ -49,7 +53,9 @@ class OrganizationResponse(BaseModel):
     short_name: str | None
     legal_address: str | None
     actual_address: str | None
+    residence_address: str | None
     director_name: str | None
+    passport_details: str | None
     phone: str | None
     email: str | None
     comment: str | None
@@ -78,6 +84,30 @@ class OrganizationCreateWithIdentifiers(OrganizationCreate):
 
 class OrganizationUpdateWithIdentifiers(OrganizationUpdate):
     identifiers: list[OrganizationIdentifierUpsert] | None = None
+
+
+class OrganizationImportPreviewRequest(BaseModel):
+    text: str = Field(min_length=10, max_length=20_000)
+
+
+class OrganizationImportCandidateResponse(BaseModel):
+    organization_type: OrganizationType
+    legal_name: str | None = None
+    short_name: str | None = None
+    legal_address: str | None = None
+    actual_address: str | None = None
+    residence_address: str | None = None
+    director_name: str | None = None
+    passport_details: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    identifiers: list[OrganizationIdentifierUpsert] = []
+
+
+class OrganizationImportPreviewResponse(BaseModel):
+    candidate: OrganizationImportCandidateResponse
+    warnings: list[str] = []
+    duplicate_warnings: list[str] = []
 
 
 class OrganizationContactCreate(BaseModel):
