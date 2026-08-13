@@ -7,45 +7,50 @@ function source(path: string): string {
 }
 
 describe("organization smart import hardening", () => {
-  const newPage = source("src/app/organizations/new/page.tsx");
-  const editPage = source("src/app/organizations/[id]/edit/page.tsx");
+  const proxy = source("src/proxy.ts");
+  const newPage = source("src/app/organizations/new/page.hardened.tsx");
+  const editPage = source("src/app/organizations/[id]/edit/page.hardened.tsx");
+  const fields = source("src/components/organization-form-fields.tsx");
+  const model = source("src/components/organization-form-model.ts");
+  const smartImport = source("src/components/organization-smart-import.tsx");
   const resources = source("src/lib/api/resources.ts");
 
-  it("shows legal-form-specific identifiers on create and edit", () => {
-    for (const page of [newPage, editPage]) {
-      expect(page).toContain('["inn", "ogrnip"]');
-      expect(page).toContain('["inn", "kpp", "ogrn"]');
-    }
+  it("activates hardened create and edit flows at the existing URLs", () => {
+    expect(proxy).toContain('pathname === "/organizations/new"');
+    expect(proxy).toContain('/organizations/new-hardened');
+    expect(proxy).toContain('/edit-hardened');
+    expect(proxy).toContain('matcher: ["/organizations/new", "/organizations/:id/edit"]');
+    expect(newPage).toContain("OrganizationFormFields");
+    expect(editPage).toContain("OrganizationFormFields");
   });
 
-  it("has IP-specific residence and passport fields on create and edit", () => {
-    for (const page of [newPage, editPage]) {
-      expect(page).toContain("Место жительства");
-      expect(page).toContain("Паспортные данные");
-      expect(page).toContain("residence_address");
-      expect(page).toContain("passport_details");
-    }
+  it("shows legal-form-specific identifiers", () => {
+    expect(model).toContain('["inn", "ogrnip"]');
+    expect(model).toContain('["inn", "kpp", "ogrn"]');
+    expect(fields).toContain("identifierTypesFor(values.orgType)");
   });
 
-  it("requires explicit apply after preview", () => {
-    expect(newPage).toContain("previewOrganizationImport");
-    expect(newPage).toContain("Применить к форме");
-    expect(newPage).toContain("setImportPreview");
+  it("has IP-specific residence and passport fields", () => {
+    expect(fields).toContain("Место жительства");
+    expect(fields).toContain("Паспортные данные");
+    expect(fields).toContain("residenceAddress");
+    expect(fields).toContain("passportDetails");
   });
 
-  it("does not submit legal entity fields for IP", () => {
-    for (const page of [newPage, editPage]) {
-      expect(page).toContain("legal_address: isIp ? null");
-      expect(page).toContain("director_name: isIp ? null");
-      expect(page).toContain("passport_details: isIp ? passportDetails.trim() || null : null");
-    }
+  it("filters incompatible fields before submit", () => {
+    expect(model).toContain("legal_address: isIp ? null");
+    expect(model).toContain("actual_address: isIp ? null");
+    expect(model).toContain("director_name: isIp ? null");
+    expect(model).toContain("residence_address: isIp ? values.residenceAddress.trim() || null : null");
+    expect(model).toContain("passport_details: isIp ? values.passportDetails.trim() || null : null");
   });
 
-  it("supports file preview without automatic save", () => {
+  it("supports file preview and requires explicit apply", () => {
     expect(resources).toContain("previewOrganizationImportFile");
     expect(resources).toContain("FormData");
-    expect(newPage).toContain("type=\"file\"");
-    expect(newPage).toContain("previewOrganizationImportFile");
-    expect(newPage).toContain("Применить к форме");
+    expect(smartImport).toContain('type="file"');
+    expect(smartImport).toContain("previewOrganizationImportFile");
+    expect(smartImport).toContain("Применить к форме");
+    expect(smartImport).toContain("onApply(preview)");
   });
 });
