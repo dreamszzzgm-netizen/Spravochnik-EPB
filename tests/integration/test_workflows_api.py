@@ -83,7 +83,10 @@ def _expert_role(db: Session) -> EmployeeFunctionRole:
     return role
 
 
-def test_workflow_api_requires_authentication_and_exact_permission(db_session: Session, client) -> None:
+def test_workflow_api_requires_authentication_and_exact_permission(
+    db_session: Session,
+    client,
+) -> None:
     assert client.get("/api/workflows").status_code == 401
 
     user = _create_user(db_session, username="workflow-api-wrong-permission")
@@ -93,7 +96,10 @@ def test_workflow_api_requires_authentication_and_exact_permission(db_session: S
     assert client.get("/api/workflows", headers=_auth(token)).status_code == 403
 
 
-def test_workflow_management_api_create_version_publish_and_read(db_session: Session, client) -> None:
+def test_workflow_management_api_create_version_publish_and_read(
+    db_session: Session,
+    client,
+) -> None:
     user = _create_user(db_session, username="workflow-api-manager")
     _grant(db_session, user=user, permission_code="workflows.manage")
     token = _token(db_session, user)
@@ -151,7 +157,10 @@ def test_workflow_management_api_create_version_publish_and_read(db_session: Ses
     assert workflow["id"] in {item["id"] for item in listing.json()}
 
 
-def test_workflow_api_rejects_double_publish_and_duplicate_sort_order(db_session: Session, client) -> None:
+def test_workflow_api_rejects_double_publish_and_duplicate_sort_order(
+    db_session: Session,
+    client,
+) -> None:
     user = _create_user(db_session, username="workflow-api-validation")
     _grant(db_session, user=user, permission_code="workflows.manage")
     token = _token(db_session, user)
