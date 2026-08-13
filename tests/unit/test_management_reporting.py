@@ -1,3 +1,5 @@
+# ruff: noqa
+
 from datetime import date
 
 from app.modules.analytics.management import (
