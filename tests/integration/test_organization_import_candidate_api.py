@@ -34,7 +34,7 @@ def test_import_candidate_does_not_create_organization(
                     "ОГРНИП: 321123456789012\n"
                     "Место жительства: г. Москва, ул. Примерная, д. 10\n"
                     "Паспорт: серия 4510 номер 123456\n"
-                ).encode("utf-8"),
+                ).encode(),
                 "text/plain",
             )
         },
