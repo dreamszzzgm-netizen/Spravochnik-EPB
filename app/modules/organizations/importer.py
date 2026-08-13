@@ -79,7 +79,7 @@ def parse_organization_requisites(text: str) -> OrganizationImportCandidate:
         if value is not None:
             candidate.director_name = value
             continue
-        value = _value_after_label(line, "Паспорт", "Паспортные данные")
+        value = _value_after_label(line, "Паспортные данные", "Паспорт")
         if value is not None:
             candidate.passport_details = value
             continue
