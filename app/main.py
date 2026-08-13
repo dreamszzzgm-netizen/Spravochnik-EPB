@@ -13,7 +13,7 @@ from app.modules.opo.routes import router as opo_router
 from app.modules.organizations.routes import router as organizations_router
 from app.modules.tasks.routes import router as tasks_router
 from app.modules.technical_devices.routes import router as technical_devices_router
-from app.modules.workflows import models as workflow_models  # noqa: F401
+from app.modules.workflows.routes import router as workflows_router
 from app.web.middleware import RequestContextMiddleware
 from app.web.routes.health import router as health_router
 
@@ -38,6 +38,7 @@ app.include_router(reference_router)
 app.include_router(contracts_router)
 app.include_router(contracts_reference_router)
 app.include_router(tasks_router)
+app.include_router(workflows_router)
 
 
 def run() -> None:
