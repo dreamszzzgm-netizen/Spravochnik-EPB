@@ -109,8 +109,9 @@ def preview_organization_import(
             identifier_value=identifier.identifier_value,
         )
         if existing is not None:
+            identifier_label = identifier.identifier_type.value.upper()
             duplicate_warnings.append(
-                f"{identifier.identifier_type.value.upper()} {identifier.identifier_value} уже используется"
+                f"{identifier_label} {identifier.identifier_value} уже используется"
             )
 
     return OrganizationImportPreviewResponse(
@@ -188,7 +189,11 @@ def update_organization(
     db: Session = Depends(get_db),
 ):
     organization = _organization_or_404(db, organization_id, authorization)
-    parent_id = payload.parent_id if "parent_id" in payload.model_fields_set else organization.parent_id
+    parent_id = (
+        payload.parent_id
+        if "parent_id" in payload.model_fields_set
+        else organization.parent_id
+    )
     if (
         "parent_id" in payload.model_fields_set
         and payload.parent_id is not None
