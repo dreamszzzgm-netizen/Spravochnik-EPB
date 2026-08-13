@@ -1,5 +1,6 @@
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -11,6 +12,7 @@ from app.modules.identity.routes import router as identity_router
 from app.modules.opo.reference_routes import router as reference_router
 from app.modules.opo.routes import router as opo_router
 from app.modules.organizations.routes import router as organizations_router
+from app.modules.organizations.service import OrganizationLegalFormError
 from app.modules.tasks.routes import router as tasks_router
 from app.modules.technical_devices.routes import router as technical_devices_router
 from app.modules.workflows.routes import router as workflows_router
@@ -27,6 +29,16 @@ app = FastAPI(
     redoc_url=None,
 )
 app.add_middleware(RequestContextMiddleware)
+
+
+@app.exception_handler(OrganizationLegalFormError)
+async def organization_legal_form_error_handler(
+    request: Request, exc: OrganizationLegalFormError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
 app.include_router(health_router)
 app.include_router(identity_router)
 app.include_router(organizations_router)
