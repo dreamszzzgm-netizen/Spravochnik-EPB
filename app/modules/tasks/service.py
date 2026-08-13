@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.buildings.models import Building
 from app.modules.contracts.models import Contract, ContractItem
+from app.modules.expertises.models import Expertise
 from app.modules.identity.audit import write_audit
 from app.modules.identity.models import Employee
 from app.modules.opo.models import OPO
@@ -23,6 +24,7 @@ from app.modules.tasks.models import (
     TaskBuilding,
     TaskContract,
     TaskContractItem,
+    TaskExpertise,
     TaskOPO,
     TaskOrganization,
     TaskTechnicalDevice,
@@ -415,6 +417,7 @@ class TaskService:
             TaskLinkKind.TECHNICAL_DEVICE: TechnicalDevice,
             TaskLinkKind.BUILDING: Building,
             TaskLinkKind.OPO: OPO,
+            TaskLinkKind.EXPERTISE: Expertise,
         }
         model = model_by_kind[link.kind]
         entity = db.get(model, link.entity_id)
@@ -469,6 +472,7 @@ class TaskService:
             TaskTechnicalDevice,
             TaskBuilding,
             TaskOPO,
+            TaskExpertise,
         )
         if delete_existing:
             for model in models:
@@ -503,6 +507,11 @@ class TaskService:
             TaskLinkKind.OPO: lambda link: TaskOPO(
                 task_id=task_id,
                 opo_id=link.entity_id,
+                is_primary=link.is_primary,
+            ),
+            TaskLinkKind.EXPERTISE: lambda link: TaskExpertise(
+                task_id=task_id,
+                expertise_id=link.entity_id,
                 is_primary=link.is_primary,
             ),
         }

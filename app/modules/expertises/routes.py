@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,13 +16,20 @@ from app.modules.expertises.models import Expertise
 from app.modules.expertises.schemas import (
     ExpertiseCreate,
     ExpertiseListResponse,
+    ExpertiseParticipantAdd,
+    ExpertiseParticipantResponse,
     ExpertiseResponse,
     ExpertiseStatusChange,
     ExpertiseStatusHistoryResponse,
     ExpertiseSubjectResponse,
+    ExpertiseTaskSummary,
     ExpertiseUpdate,
+    WorkflowStart,
+    WorkflowStartedTask,
+    WorkflowTemplateOption,
 )
 from app.modules.expertises.service import (
+    ExpertiseDuplicateParticipantError,
     ExpertiseService,
     ExpertiseValidationError,
     ExpertiseVersionConflictError,
@@ -31,6 +39,8 @@ from app.modules.identity.dependencies import require_scoped_permission
 from app.modules.identity.models import Employee
 from app.modules.organizations.models import Organization
 from app.modules.technical_devices.models import TechnicalDevice
+from app.modules.workflows import repository as workflows_repository
+from app.modules.workflows.service import WorkflowNotFoundError, WorkflowValidationError
 
 router = APIRouter(prefix="/api/expertises", tags=["expertises"])
 service = ExpertiseService()
@@ -39,6 +49,7 @@ _dep_view = Depends(require_scoped_permission("expertises.view"))  # noqa: B008
 _dep_create = Depends(require_scoped_permission("expertises.create"))  # noqa: B008
 _dep_edit = Depends(require_scoped_permission("expertises.edit"))  # noqa: B008
 _dep_status = Depends(require_scoped_permission("expertises.change_status"))  # noqa: B008
+_dep_assign = Depends(require_scoped_permission("expertises.assign_experts"))  # noqa: B008
 
 
 def _not_found() -> HTTPException:
@@ -252,6 +263,17 @@ def create_expertise(
     return _expertise_response(db, expertise)
 
 
+@router.get("/workflow-templates", response_model=list[WorkflowTemplateOption])
+def list_workflow_templates(
+    _authorization: AuthorizationContext = _dep_edit,
+    db: Session = Depends(get_db),
+) -> list[WorkflowTemplateOption]:
+    return [
+        WorkflowTemplateOption(id=template.id, code=template.code, name=template.name)
+        for template in workflows_repository.list_templates_with_published_version(db)
+    ]
+
+
 @router.get("/{expertise_id}", response_model=ExpertiseResponse)
 def get_expertise(
     expertise_id: uuid.UUID,
@@ -322,4 +344,141 @@ def list_status_history(
     return [
         ExpertiseStatusHistoryResponse.model_validate(row)
         for row in repository.list_expertise_status_history(db, expertise_id)
+    ]
+
+
+@router.get("/{expertise_id}/participants", response_model=list[ExpertiseParticipantResponse])
+def list_participants(
+    expertise_id: uuid.UUID,
+    authorization: AuthorizationContext = _dep_view,
+    db: Session = Depends(get_db),
+) -> list[ExpertiseParticipantResponse]:
+    _expertise_for_read_or_404(db, expertise_id, authorization)
+    rows = repository.list_participants_with_employees(db, expertise_id)
+    return [
+        ExpertiseParticipantResponse(
+            id=participant.id,
+            expertise_id=participant.expertise_id,
+            employee_id=participant.employee_id,
+            participation_role=participant.participation_role,
+            employee_name=employee.full_name if employee else None,
+            position=employee.position if employee else None,
+        )
+        for participant, employee in rows
+    ]
+
+
+@router.post(
+    "/{expertise_id}/participants",
+    response_model=ExpertiseParticipantResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_participant(
+    expertise_id: uuid.UUID,
+    payload: ExpertiseParticipantAdd,
+    authorization: AuthorizationContext = _dep_assign,
+    db: Session = Depends(get_db),
+) -> ExpertiseParticipantResponse:
+    expertise = _expertise_for_mutation_or_404(db, expertise_id, authorization)
+    try:
+        participant = service.add_participant(
+            db,
+            actor_user_id=authorization.user_id,
+            expertise=expertise,
+            employee_id=payload.employee_id,
+            participation_role=payload.participation_role,
+        )
+    except ExpertiseDuplicateParticipantError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ExpertiseValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+    employee = db.get(Employee, participant.employee_id)
+    return ExpertiseParticipantResponse(
+        id=participant.id,
+        expertise_id=participant.expertise_id,
+        employee_id=participant.employee_id,
+        participation_role=participant.participation_role,
+        employee_name=employee.full_name if employee else None,
+        position=employee.position if employee else None,
+    )
+
+
+@router.delete(
+    "/{expertise_id}/participants/{employee_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_participant(
+    expertise_id: uuid.UUID,
+    employee_id: uuid.UUID,
+    authorization: AuthorizationContext = _dep_assign,
+    db: Session = Depends(get_db),
+):
+    expertise = _expertise_for_mutation_or_404(db, expertise_id, authorization)
+    try:
+        service.remove_participant(
+            db,
+            actor_user_id=authorization.user_id,
+            expertise=expertise,
+            employee_id=employee_id,
+        )
+    except ExpertiseValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+
+
+@router.get("/{expertise_id}/tasks", response_model=list[ExpertiseTaskSummary])
+def list_expertise_tasks(
+    expertise_id: uuid.UUID,
+    authorization: AuthorizationContext = _dep_view,
+    db: Session = Depends(get_db),
+) -> list[ExpertiseTaskSummary]:
+    _expertise_for_read_or_404(db, expertise_id, authorization)
+    return [
+        ExpertiseTaskSummary(
+            id=task.id,
+            title=task.title,
+            status=task.status.value,
+            priority=task.priority.value,
+            due_date=task.due_date,
+            created_at=task.created_at,
+        )
+        for task in repository.list_expertise_tasks(db, expertise_id)
+    ]
+
+
+@router.post(
+    "/{expertise_id}/workflow/start",
+    response_model=list[WorkflowStartedTask],
+    status_code=status.HTTP_201_CREATED,
+)
+def start_workflow(
+    expertise_id: uuid.UUID,
+    payload: WorkflowStart,
+    authorization: AuthorizationContext = _dep_edit,
+    db: Session = Depends(get_db),
+) -> list[WorkflowStartedTask]:
+    expertise = _expertise_for_mutation_or_404(db, expertise_id, authorization)
+    try:
+        tasks = service.start_workflow(
+            db,
+            actor_user_id=authorization.user_id,
+            creator_employee_id=authorization.employee_id,
+            expertise=expertise,
+            workflow_template_id=payload.workflow_template_id,
+            anchor_date=date.today(),
+        )
+    except ExpertiseValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+    except WorkflowNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Workflow not found") from exc
+    except WorkflowValidationError as exc:
+        raise _unprocessable(str(exc)) from exc
+    return [
+        WorkflowStartedTask(
+            id=task.id,
+            title=task.title,
+            status=task.status.value,
+            source_workflow_template_version_id=task.source_workflow_template_version_id,
+            source_workflow_task_template_id=task.source_workflow_task_template_id,
+        )
+        for task in tasks
     ]

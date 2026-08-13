@@ -1,6 +1,11 @@
 import enum
 
 
+class ExpertiseParticipantRole(enum.StrEnum):
+    EXPERT = "expert"
+    SPECIALIST = "specialist"
+
+
 class ExpertiseStatus(enum.StrEnum):
     PREPARATION = "preparation"
     DOCUMENT_COLLECTION = "document_collection"

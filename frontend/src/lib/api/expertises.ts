@@ -169,3 +169,91 @@ export interface BuildingOption {
 export function listBuildings(options: { signal?: AbortSignal } = {}) {
   return apiRequest<{ items: BuildingOption[] }>("/api/buildings", options);
 }
+
+export interface EmployeeOption {
+  id: string;
+  full_name: string;
+  position: string | null;
+  employment_type: string;
+}
+
+export function listEmployees(options: { signal?: AbortSignal } = {}) {
+  return apiRequest<EmployeeOption[]>("/api/employees", options);
+}
+
+export type ExpertiseParticipantRole = "expert" | "specialist";
+
+export const EXPERTISE_PARTICIPANT_ROLE_LABELS: Record<ExpertiseParticipantRole, string> = {
+  expert: "Эксперт",
+  specialist: "Специалист",
+};
+
+export interface ExpertiseParticipantResponse {
+  id: string;
+  expertise_id: string;
+  employee_id: string;
+  participation_role: ExpertiseParticipantRole;
+  employee_name: string | null;
+  position: string | null;
+}
+
+export function getExpertiseParticipants(
+  id: string,
+  options: { signal?: AbortSignal } = {},
+) {
+  return apiRequest<ExpertiseParticipantResponse[]>(`/api/expertises/${id}/participants`, options);
+}
+
+export function addExpertiseParticipant(
+  id: string,
+  input: { employee_id: string; participation_role: ExpertiseParticipantRole },
+) {
+  return apiRequest<ExpertiseParticipantResponse>(`/api/expertises/${id}/participants`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function removeExpertiseParticipant(id: string, employeeId: string) {
+  return apiRequest<void>(`/api/expertises/${id}/participants/${employeeId}`, {
+    method: "DELETE",
+  });
+}
+
+export interface ExpertiseTaskSummary {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  due_date: string | null;
+  created_at: string;
+}
+
+export function getExpertiseTasks(id: string, options: { signal?: AbortSignal } = {}) {
+  return apiRequest<ExpertiseTaskSummary[]>(`/api/expertises/${id}/tasks`, options);
+}
+
+export interface WorkflowOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export function listWorkflowTemplates(options: { signal?: AbortSignal } = {}) {
+  return apiRequest<WorkflowOption[]>("/api/expertises/workflow-templates", options);
+}
+
+export interface WorkflowStartedTask {
+  id: string;
+  title: string;
+  status: string;
+  source_workflow_template_version_id: string | null;
+  source_workflow_task_template_id: string | null;
+}
+
+export function startExpertiseWorkflow(id: string, workflowTemplateId: string) {
+  return apiRequest<WorkflowStartedTask[]>(`/api/expertises/${id}/workflow/start`, {
+    method: "POST",
+    body: JSON.stringify({ workflow_template_id: workflowTemplateId }),
+  });
+}

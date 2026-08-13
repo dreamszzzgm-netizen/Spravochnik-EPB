@@ -61,6 +61,28 @@ def list_templates(db: Session) -> list[WorkflowTemplate]:
     )
 
 
+def list_templates_with_published_version(db: Session) -> list[WorkflowTemplate]:
+    published_version = (
+        sa.select(WorkflowTemplateVersion.id)
+        .where(
+            WorkflowTemplateVersion.workflow_template_id == WorkflowTemplate.id,
+            WorkflowTemplateVersion.published_at.is_not(None),
+        )
+        .exists()
+    )
+    return list(
+        db.scalars(
+            sa.select(WorkflowTemplate)
+            .where(
+                WorkflowTemplate.deleted_at.is_(None),
+                WorkflowTemplate.is_active.is_(True),
+                published_version,
+            )
+            .order_by(WorkflowTemplate.name.asc(), WorkflowTemplate.id.asc())
+        ).all()
+    )
+
+
 def next_version_number(db: Session, template_id: uuid.UUID) -> int:
     current = db.scalar(
         sa.select(sa.func.max(WorkflowTemplateVersion.version_number)).where(

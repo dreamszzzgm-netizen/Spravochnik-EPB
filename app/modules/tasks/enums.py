@@ -22,3 +22,4 @@ class TaskLinkKind(enum.StrEnum):
     TECHNICAL_DEVICE = "technical_device"
     BUILDING = "building"
     OPO = "opo"
+    EXPERTISE = "expertise"

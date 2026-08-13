@@ -9,6 +9,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -16,7 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.base import Base
 from app.database.enums import enum_values
-from app.modules.expertises.enums import ExpertiseStatus
+from app.modules.expertises.enums import ExpertiseParticipantRole, ExpertiseStatus
 
 
 class Expertise(Base):
@@ -104,6 +105,44 @@ class ExpertiseContractItem(Base):
         UUID(as_uuid=True),
         ForeignKey("contract_items.id", ondelete="RESTRICT"),
         primary_key=True,
+    )
+
+
+class ExpertiseParticipant(Base):
+    __tablename__ = "expertise_participants"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    expertise_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("expertises.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    employee_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("employees.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    participation_role: Mapped[ExpertiseParticipantRole] = mapped_column(
+        Enum(
+            ExpertiseParticipantRole,
+            name="expertise_participation_role",
+            values_callable=enum_values,
+        ),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "expertise_id",
+            "employee_id",
+            "participation_role",
+            name="uq_expertise_participants_employee_role",
+        ),
     )
 
 

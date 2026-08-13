@@ -190,3 +190,18 @@ class TaskOPO(Base):
         index=True,
     )
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class TaskExpertise(Base):
+    __tablename__ = "task_expertises"
+
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), primary_key=True
+    )
+    expertise_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("expertises.id", ondelete="RESTRICT"),
+        primary_key=True,
+        index=True,
+    )
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
