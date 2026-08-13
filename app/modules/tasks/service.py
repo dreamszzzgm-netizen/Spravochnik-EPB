@@ -73,6 +73,7 @@ class TaskService:
         is_personal: bool,
         assignee_ids: Iterable[uuid.UUID],
         links: Iterable[TaskLinkInput],
+        commit: bool = True,
     ) -> Task:
         clean_title = self._clean_title(title)
         clean_description = self._clean_optional_text(description)
@@ -115,8 +116,10 @@ class TaskService:
                 summary=f"Создана задача: {task.title}",
                 result="success",
             )
-            db.commit()
-            db.refresh(task)
+            db.flush()
+            if commit:
+                db.commit()
+                db.refresh(task)
         except Exception:
             db.rollback()
             raise
