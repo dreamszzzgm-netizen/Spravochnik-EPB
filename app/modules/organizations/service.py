@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -79,9 +79,19 @@ class OrganizationService:
         parent_id: uuid.UUID | None,
         legal_address: str | None = None,
         actual_address: str | None = None,
+        residence_address: str | None = None,
         director_name: str | None = None,
         phone: str | None = None,
         email: str | None = None,
+        passport_series: str | None = None,
+        passport_number: str | None = None,
+        passport_issued_by: str | None = None,
+        passport_issue_date: date | None = None,
+        passport_department_code: str | None = None,
+        bank_name: str | None = None,
+        bank_bik: str | None = None,
+        bank_account: str | None = None,
+        correspondent_account: str | None = None,
         comment: str | None = None,
         identifiers: list[dict[str, str | bool]] | None = None,
     ) -> Organization:
@@ -96,9 +106,19 @@ class OrganizationService:
             parent_id=parent_id,
             legal_address=legal_address,
             actual_address=actual_address,
+            residence_address=residence_address,
             director_name=director_name,
             phone=phone,
             email=email,
+            passport_series=passport_series,
+            passport_number=passport_number,
+            passport_issued_by=passport_issued_by,
+            passport_issue_date=passport_issue_date,
+            passport_department_code=passport_department_code,
+            bank_name=bank_name,
+            bank_bik=bank_bik,
+            bank_account=bank_account,
+            correspondent_account=correspondent_account,
             comment=comment,
         )
         db.add(organization)
@@ -132,9 +152,19 @@ class OrganizationService:
         parent_id: uuid.UUID | None,
         legal_address: str | None = None,
         actual_address: str | None = None,
+        residence_address: str | None = None,
         director_name: str | None = None,
         phone: str | None = None,
         email: str | None = None,
+        passport_series: str | None = None,
+        passport_number: str | None = None,
+        passport_issued_by: str | None = None,
+        passport_issue_date: date | None = None,
+        passport_department_code: str | None = None,
+        bank_name: str | None = None,
+        bank_bik: str | None = None,
+        bank_account: str | None = None,
+        correspondent_account: str | None = None,
         comment: str | None = None,
         identifiers: list[dict[str, str | bool]] | None = None,
     ) -> Organization:
@@ -155,24 +185,28 @@ class OrganizationService:
         if parent_id != organization.parent_id:
             organization.parent_id = parent_id
             changed.append("parent_id")
-        if legal_address is not None and legal_address != organization.legal_address:
-            organization.legal_address = legal_address
-            changed.append("legal_address")
-        if actual_address is not None and actual_address != organization.actual_address:
-            organization.actual_address = actual_address
-            changed.append("actual_address")
-        if director_name is not None and director_name != organization.director_name:
-            organization.director_name = director_name
-            changed.append("director_name")
-        if phone is not None and phone != organization.phone:
-            organization.phone = phone
-            changed.append("phone")
-        if email is not None and email != organization.email:
-            organization.email = email
-            changed.append("email")
-        if comment is not None and comment != organization.comment:
-            organization.comment = comment
-            changed.append("comment")
+        optional_updates = {
+            "legal_address": legal_address,
+            "actual_address": actual_address,
+            "residence_address": residence_address,
+            "director_name": director_name,
+            "phone": phone,
+            "email": email,
+            "passport_series": passport_series,
+            "passport_number": passport_number,
+            "passport_issued_by": passport_issued_by,
+            "passport_issue_date": passport_issue_date,
+            "passport_department_code": passport_department_code,
+            "bank_name": bank_name,
+            "bank_bik": bank_bik,
+            "bank_account": bank_account,
+            "correspondent_account": correspondent_account,
+            "comment": comment,
+        }
+        for field, value in optional_updates.items():
+            if value is not None and value != getattr(organization, field):
+                setattr(organization, field, value)
+                changed.append(field)
         write_audit(
             db,
             action="organization.updated",
