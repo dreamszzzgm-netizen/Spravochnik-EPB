@@ -25,16 +25,16 @@ function Show-PilotMessage {
 
 try {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        throw "Docker недоступен.`n`nОбратитесь к администратору."
+        throw "Docker is not available.`n`nPlease contact the administrator."
     }
 
     if (-not (Test-Path -LiteralPath $EnvFile) -or -not (Test-Path -LiteralPath $ComposeFile)) {
-        throw "Не найдены файлы конфигурации Pilot.`n`nОбратитесь к администратору."
+        throw "Pilot configuration files were not found.`n`nPlease contact the administrator."
     }
 
     & docker info *> $null
     if ($LASTEXITCODE -ne 0) {
-        Show-PilotMessage -Message "Docker Desktop уже остановлен. Spravoshnik EPB не работает."
+        Show-PilotMessage -Message "Docker Desktop is already stopped. Spravoshnik EPB is not running."
         exit 0
     }
 
@@ -47,14 +47,14 @@ try {
             stop
 
         if ($LASTEXITCODE -ne 0) {
-            throw "Не удалось остановить Spravoshnik EPB."
+            throw "Spravoshnik EPB could not be stopped."
         }
     }
     finally {
         Pop-Location
     }
 
-    Show-PilotMessage -Message "Spravoshnik EPB остановлен.`n`nБаза данных и документы сохранены."
+    Show-PilotMessage -Message "Spravoshnik EPB stopped.`n`nDatabase and documents were preserved."
 }
 catch {
     Show-PilotMessage -Message $_.Exception.Message -Icon ([System.Windows.Forms.MessageBoxIcon]::Error)
