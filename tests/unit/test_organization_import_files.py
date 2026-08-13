@@ -1,5 +1,5 @@
-from io import BytesIO
-from zipfile import ZIP_DEFLATED, ZipFile
+import io
+import zipfile
 
 import pytest
 
@@ -10,8 +10,8 @@ from app.modules.organizations.import_files import (
 
 
 def _zip_bytes(files: dict[str, str]) -> bytes:
-    buffer = BytesIO()
-    with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for path, content in files.items():
             archive.writestr(path, content)
     return buffer.getvalue()
