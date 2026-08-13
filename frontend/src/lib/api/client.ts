@@ -19,6 +19,7 @@ export async function apiRequest<T>(
   const abortFromCaller = () => timeoutController.abort(signal?.reason);
   signal?.addEventListener("abort", abortFromCaller, { once: true });
   const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+  const hasJsonBody = Boolean(body) && !(body instanceof FormData);
 
   try {
     const response = await fetch(apiUrl(path), {
@@ -27,7 +28,7 @@ export async function apiRequest<T>(
       credentials: "include",
       headers: {
         Accept: "application/json",
-        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
         ...headers,
       },
       signal: timeoutController.signal,
