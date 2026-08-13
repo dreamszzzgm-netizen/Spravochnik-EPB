@@ -1,9 +1,10 @@
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -42,9 +43,19 @@ class Organization(Base):
     short_name: Mapped[str | None] = mapped_column(String(120))
     legal_address: Mapped[str | None] = mapped_column(String(500))
     actual_address: Mapped[str | None] = mapped_column(String(500))
+    residence_address: Mapped[str | None] = mapped_column(String(500))
     director_name: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(64))
     email: Mapped[str | None] = mapped_column(String(320))
+    passport_series: Mapped[str | None] = mapped_column(String(16))
+    passport_number: Mapped[str | None] = mapped_column(String(32))
+    passport_issued_by: Mapped[str | None] = mapped_column(String(500))
+    passport_issue_date: Mapped[date | None] = mapped_column(Date)
+    passport_department_code: Mapped[str | None] = mapped_column(String(32))
+    bank_name: Mapped[str | None] = mapped_column(String(255))
+    bank_bik: Mapped[str | None] = mapped_column(String(20))
+    bank_account: Mapped[str | None] = mapped_column(String(64))
+    correspondent_account: Mapped[str | None] = mapped_column(String(64))
     comment: Mapped[str | None] = mapped_column(String)
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="RESTRICT"), index=True
