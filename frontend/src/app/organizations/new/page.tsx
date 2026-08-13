@@ -23,6 +23,12 @@ const ORG_TYPES: { value: OrganizationType; label: string }[] = [
 
 const LEGAL_IDENTIFIERS: IdentifierType[] = ["inn", "kpp", "ogrn"];
 const IP_IDENTIFIERS: IdentifierType[] = ["inn", "ogrnip"];
+const IDENTIFIER_LABELS: Partial<Record<IdentifierType, string>> = {
+  inn: "ИНН",
+  kpp: "КПП",
+  ogrn: "ОГРН",
+  ogrnip: "ОГРНИП",
+};
 
 function valueOrEmpty(value: string | null | undefined): string {
   return value ?? "";
@@ -294,7 +300,7 @@ export default function NewOrganizationPage() {
           <CardContent className="grid gap-4 sm:grid-cols-2">
             {identifierTypes.map((type) => (
               <div key={type} className="space-y-2">
-                <Label htmlFor={`ident_${type}`}>{type.toUpperCase()}</Label>
+                <Label htmlFor={`ident_${type}`}>{IDENTIFIER_LABELS[type] ?? type}</Label>
                 <Input id={`ident_${type}`} value={identifiers[type] ?? ""} onChange={(event) => setIdentifiers((previous) => ({ ...previous, [type]: event.target.value }))} maxLength={40} disabled={pending} />
               </div>
             ))}
