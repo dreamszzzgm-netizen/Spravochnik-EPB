@@ -1,26 +1,31 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { AlertTriangle, Building2, FileText, ListTodo, ShieldCheck } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ApiError } from "@/lib/api/errors";
+import { getManagementReport, type ManagementReportResponse } from "@/lib/api/resources";
 
-const AVAILABLE_SECTIONS = [
-  {
-    title: "Организации",
-    description: "Общее количество организаций и дальнейшая детализация по выбранному периоду.",
-    icon: Building2,
-  },
-  {
-    title: "Договоры",
-    description: "Активные, завершённые и расторгнутые договоры без дублирования бизнес-данных.",
-    icon: FileText,
-  },
-  {
-    title: "Задачи",
-    description: "Новые, в работе, выполненные, отменённые и просроченные задачи.",
-    icon: ListTodo,
-  },
-];
+function MetricValue({ value }: { value: number | undefined }) {
+  return <p className="text-3xl font-semibold tabular-nums">{value ?? "—"}</p>;
+}
 
 export default function ReportsPage() {
+  const [report, setReport] = useState<ManagementReportResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    getManagementReport({ signal: controller.signal })
+      .then(setReport)
+      .catch((caught: unknown) => {
+        if (caught instanceof DOMException && caught.name === "AbortError") return;
+        setError(caught instanceof ApiError ? caught.detail : "Не удалось загрузить отчёт.");
+      });
+    return () => controller.abort();
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="space-y-1">
@@ -30,20 +35,55 @@ export default function ReportsPage() {
         </p>
       </div>
 
+      {error && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive" role="alert">
+          {error}
+        </div>
+      )}
+
       <div className="grid gap-4 md:grid-cols-3">
-        {AVAILABLE_SECTIONS.map(({ title, description, icon: Icon }) => (
-          <Card key={title}>
-            <CardHeader className="flex flex-row items-center gap-3 space-y-0">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                <Icon className="h-5 w-5" aria-hidden="true" />
-              </div>
-              <CardTitle className="text-base">{title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{description}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-3 space-y-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+              <Building2 className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <CardTitle className="text-base">Организации</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <MetricValue value={report?.organizations_total} />
+            <p className="text-sm text-muted-foreground">Активных карточек организаций</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-3 space-y-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+              <FileText className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <CardTitle className="text-base">Договоры в работе</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <MetricValue value={report?.contracts.active} />
+            <p className="text-sm text-muted-foreground">
+              Всего: {report?.contracts.total ?? "—"} · завершено: {report?.contracts.completed ?? "—"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-3 space-y-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+              <ListTodo className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <CardTitle className="text-base">Просроченные задачи</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            <MetricValue value={report?.tasks.overdue} />
+            <p className="text-sm text-muted-foreground">
+              Всего: {report?.tasks.total ?? "—"} · выполнено: {report?.tasks.completed ?? "—"}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
