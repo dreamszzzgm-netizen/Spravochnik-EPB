@@ -13,6 +13,7 @@ import type {
   OrganizationContactResponse,
   OrganizationCreatePayload,
   OrganizationIdentifierResponse,
+  OrganizationImportPreviewResponse,
   OrganizationPaginatedResponse,
   OrganizationResponse,
   OrganizationUpdatePayload,
@@ -50,6 +51,12 @@ export const createOrganization = (payload: OrganizationCreatePayload) =>
   apiRequest<OrganizationResponse>("/api/organizations", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+
+export const previewOrganizationImport = (text: string) =>
+  apiRequest<OrganizationImportPreviewResponse>("/api/organizations/import-preview", {
+    method: "POST",
+    body: JSON.stringify({ text }),
   });
 
 export const getOrganization = (id: string, options: ResourceOptions = {}) =>
