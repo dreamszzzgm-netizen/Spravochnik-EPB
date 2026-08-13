@@ -170,13 +170,17 @@ def test_version_validation_rejects_empty_duplicate_order_and_inactive_role(
 
     role.is_active = False
     db_session.commit()
-    with pytest.raises(WorkflowValidationError, match="роль"):
-        service.create_version(
-            db_session,
-            actor_user_id=actor.id,
-            template_id=workflow.id,
-            task_templates=[_step(role, title="A", order=10)],
-        )
+    try:
+        with pytest.raises(WorkflowValidationError, match="роль"):
+            service.create_version(
+                db_session,
+                actor_user_id=actor.id,
+                template_id=workflow.id,
+                task_templates=[_step(role, title="A", order=10)],
+            )
+    finally:
+        role.is_active = True
+        db_session.commit()
 
 
 def test_publishing_same_version_twice_is_rejected(db_session: Session) -> None:
