@@ -12,12 +12,18 @@ from app.modules.analytics.document_control import (
 def test_classifies_document_expiration_boundaries() -> None:
     today = date(2026, 8, 13)
 
-    assert classify_document(DocumentRecord("insurance", date(2026, 8, 12)), today) is DocumentStatus.EXPIRED
-    assert classify_document(DocumentRecord("insurance", date(2026, 8, 13)), today) is DocumentStatus.EXPIRING_14
-    assert classify_document(DocumentRecord("insurance", date(2026, 8, 27)), today) is DocumentStatus.EXPIRING_14
-    assert classify_document(DocumentRecord("insurance", date(2026, 8, 28)), today) is DocumentStatus.EXPIRING_40
-    assert classify_document(DocumentRecord("insurance", date(2026, 9, 22)), today) is DocumentStatus.EXPIRING_40
-    assert classify_document(DocumentRecord("insurance", date(2026, 9, 23)), today) is DocumentStatus.VALID
+    cases = [
+        (date(2026, 8, 12), DocumentStatus.EXPIRED),
+        (date(2026, 8, 13), DocumentStatus.EXPIRING_14),
+        (date(2026, 8, 27), DocumentStatus.EXPIRING_14),
+        (date(2026, 8, 28), DocumentStatus.EXPIRING_40),
+        (date(2026, 9, 22), DocumentStatus.EXPIRING_40),
+        (date(2026, 9, 23), DocumentStatus.VALID),
+    ]
+
+    for expires_at, expected in cases:
+        document = DocumentRecord("insurance", expires_at)
+        assert classify_document(document, today) is expected
 
 
 def test_document_without_expiry_is_distinguished_when_expiry_is_required() -> None:
