@@ -28,6 +28,24 @@ describe("apiRequest", () => {
     );
   });
 
+  it("lets the browser set multipart boundaries for FormData", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const body = new FormData();
+    body.append("file", new Blob(["test"]), "card.txt");
+
+    await apiRequest("/api/organizations/import-candidate", { method: "POST", body });
+
+    const options = fetchMock.mock.calls[0]?.[1];
+    const headers = new Headers(options?.headers);
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.has("Content-Type")).toBe(false);
+  });
+
   it.each([401, 403, 404, 422, 500])("normalizes HTTP %s failures", async (status) => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ detail: "Failure detail" }), {
