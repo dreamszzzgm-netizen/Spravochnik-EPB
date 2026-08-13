@@ -69,6 +69,6 @@ def test_candidate_reports_low_confidence_fields_instead_of_persisting() -> None
     candidate = parse_organization_text("ИНН: 7701234567")
 
     assert candidate.identifiers[IdentifierType.INN] == "7701234567"
-    assert candidate.requires_review is True
+    assert candidate.requires_review
     assert candidate.organization_type is None
     assert candidate.warnings
