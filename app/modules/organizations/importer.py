@@ -7,6 +7,7 @@ from xml.etree import ElementTree
 
 from pypdf import PdfReader
 
+from app.modules.organizations import local_ocr
 from app.modules.organizations.enums import IdentifierType, OrganizationType
 
 _MAX_OFFICE_UNCOMPRESSED_BYTES = 20 * 1024 * 1024
@@ -148,9 +149,7 @@ def extract_local_import_text(filename: str, content_type: str | None, raw: byte
     if suffix == ".pdf":
         return _extract_pdf_text(raw)
     if suffix in {".png", ".jpg", ".jpeg"}:
-        raise LocalOcrUnavailableError(
-            "Для изображений требуется подключённый локальный OCR; внешний OCR запрещён"
-        )
+        return _extract_image_text(raw)
     raise UnsupportedImportFormatError("Неподдерживаемый формат файла реквизитов")
 
 
@@ -283,8 +282,20 @@ def _extract_pdf_text(raw: bytes) -> str:
     if len(reader.pages) > _MAX_PDF_PAGES:
         raise InvalidImportFileError(f"PDF содержит больше {_MAX_PDF_PAGES} страниц")
     text = "\n".join((page.extract_text() or "").strip() for page in reader.pages).strip()
-    if not text:
-        raise LocalOcrUnavailableError(
-            "PDF не содержит текстового слоя; для скана требуется подключённый локальный OCR"
-        )
-    return text
+    if text:
+        return text
+    try:
+        return local_ocr.extract_scanned_pdf_text(raw, max_pages=_MAX_PDF_PAGES)
+    except local_ocr.LocalOcrUnavailableError as exc:
+        raise LocalOcrUnavailableError(str(exc)) from exc
+    except local_ocr.InvalidOcrInputError as exc:
+        raise InvalidImportFileError(str(exc)) from exc
+
+
+def _extract_image_text(raw: bytes) -> str:
+    try:
+        return local_ocr.extract_image_text(raw)
+    except local_ocr.LocalOcrUnavailableError as exc:
+        raise LocalOcrUnavailableError(str(exc)) from exc
+    except local_ocr.InvalidOcrInputError as exc:
+        raise InvalidImportFileError(str(exc)) from exc
