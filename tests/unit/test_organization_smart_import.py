@@ -1,5 +1,3 @@
-# ruff: noqa
-
 from app.modules.organizations.enums import IdentifierType, OrganizationType
 from app.modules.organizations.smart_import import parse_organization_text
 
