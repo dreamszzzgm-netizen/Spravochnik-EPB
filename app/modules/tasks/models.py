@@ -1,7 +1,19 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,6 +24,21 @@ from app.modules.tasks.enums import TaskPriority, TaskStatus
 
 class Task(Base):
     __tablename__ = "tasks"
+    __table_args__ = (
+        CheckConstraint(
+            "(source_workflow_template_version_id IS NULL "
+            "AND source_workflow_task_template_id IS NULL) "
+            "OR (source_workflow_template_version_id IS NOT NULL "
+            "AND source_workflow_task_template_id IS NOT NULL)",
+            name="ck_tasks_workflow_source_pair",
+        ),
+        ForeignKeyConstraint(
+            ["source_workflow_task_template_id", "source_workflow_template_version_id"],
+            ["workflow_task_templates.id", "workflow_task_templates.workflow_template_version_id"],
+            name="fk_tasks_workflow_source",
+            ondelete="RESTRICT",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -38,6 +65,12 @@ class Task(Base):
         index=True,
     )
     is_personal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    source_workflow_template_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), index=True
+    )
+    source_workflow_task_template_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
