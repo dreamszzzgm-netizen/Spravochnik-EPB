@@ -30,9 +30,15 @@ def test_extracts_docx_paragraphs_and_table_cells() -> None:
     raw = _zip_bytes(
         {
             "word/document.xml": """
-                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                <w:document
+                  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                >
                   <w:body>
-                    <w:p><w:r><w:t>Индивидуальный предприниматель Иванов Иван Иванович</w:t></w:r></w:p>
+                    <w:p>
+                      <w:r>
+                        <w:t>Индивидуальный предприниматель Иванов Иван Иванович</w:t>
+                      </w:r>
+                    </w:p>
                     <w:tbl><w:tr>
                       <w:tc><w:p><w:r><w:t>ИНН</w:t></w:r></w:p></w:tc>
                       <w:tc><w:p><w:r><w:t>123456789012</w:t></w:r></w:p></w:tc>
