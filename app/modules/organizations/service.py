@@ -412,6 +412,21 @@ class OrganizationService:
         identifier_value: str,
         is_primary: bool,
     ) -> OrganizationIdentifier:
+        validate_organization_legal_form(
+            organization.organization_type,
+            legal_address=organization.legal_address,
+            actual_address=organization.actual_address,
+            director_name=organization.director_name,
+            residence_address=organization.residence_address,
+            passport_details=organization.passport_details,
+            identifiers=[
+                {
+                    "identifier_type": identifier_type,
+                    "identifier_value": identifier_value,
+                    "is_primary": is_primary,
+                }
+            ],
+        )
         identifier = OrganizationIdentifier(
             organization_id=organization.id,
             identifier_type=identifier_type,
