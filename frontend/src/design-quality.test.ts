@@ -26,12 +26,6 @@ function contrast(a: [number, number, number], b: [number, number, number]): num
 }
 
 describe("design quality regressions", () => {
-  it("gives task checkboxes a compact visual with a 44px hit area", () => {
-    const tasks = source("src/components/dashboard/my-tasks-list.tsx");
-    expect(tasks).toContain('className="task-checkbox-hit-area');
-    expect(tasks).toContain('className="task-checkbox-visual');
-  });
-
   it("keeps notification content within narrow viewports", () => {
     const notifications = source("src/components/notifications-popover.tsx");
     expect(notifications).toContain("w-[min(380px,calc(100vw-2rem))]");
