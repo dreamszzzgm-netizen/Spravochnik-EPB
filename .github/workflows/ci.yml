@@ -45,6 +45,7 @@ jobs:
         run: >-
           timeout 120s pytest -vv
           tests/unit/test_organization_smart_import.py
+          tests/unit/test_organization_import_files.py
           tests/unit/test_organization_ip_fields.py
           tests/integration/test_organization_ip_profile.py
           tests/integration/test_organization_ip_profile_api.py
