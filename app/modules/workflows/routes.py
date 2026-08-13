@@ -36,7 +36,7 @@ def _not_found() -> HTTPException:
 
 def _unprocessable(message: str) -> HTTPException:
     return HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         detail=message,
     )
 
