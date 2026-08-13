@@ -3,6 +3,7 @@ from fastapi import FastAPI
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.modules.analytics.routes import router as analytics_router
 from app.modules.buildings.routes import router as buildings_router
 from app.modules.contracts.routes import reference_router as contracts_reference_router
 from app.modules.contracts.routes import router as contracts_router
@@ -37,6 +38,7 @@ app.include_router(reference_router)
 app.include_router(contracts_router)
 app.include_router(contracts_reference_router)
 app.include_router(tasks_router)
+app.include_router(analytics_router)
 
 
 def run() -> None:
