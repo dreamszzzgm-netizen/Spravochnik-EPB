@@ -15,6 +15,9 @@ def test_pilot_files_exist() -> None:
         "docker-compose.pilot.yml",
         "deploy/pilot/.env.pilot.example",
         "deploy/pilot/backup.sh",
+        "deploy/pilot/start-pilot.ps1",
+        "deploy/pilot/stop-pilot.ps1",
+        "deploy/pilot/create-desktop-shortcuts.ps1",
         "docs/PILOT_DEPLOYMENT.md",
     ):
         assert (ROOT / relative).is_file(), relative
@@ -97,6 +100,47 @@ def test_shell_scripts_are_checked_out_with_unix_line_endings() -> None:
     gitattributes = _read(".gitattributes")
 
     assert "*.sh text eol=lf" in gitattributes
+
+
+def test_windows_smart_launcher_starts_docker_and_pilot_safely() -> None:
+    launcher = _read("deploy/pilot/start-pilot.ps1")
+
+    assert "spravoshnik-epb-work" in launcher
+    assert "docker-compose.pilot.yml" in launcher
+    assert "deploy\\pilot\\.env.pilot" in launcher or ".env.pilot" in launcher
+    assert "Docker Desktop.exe" in launcher
+    assert "docker info" in launcher or "& docker info" in launcher
+    assert "docker compose" in launcher or "& docker compose" in launcher
+    assert "up" in launcher and "-d" in launcher
+    assert "/backend/health/live" in launcher
+    assert "PILOT_HTTP_PORT" in launcher
+    assert "Start-Process" in launcher
+    assert "MessageBox" in launcher
+    assert "down -v" not in launcher
+
+
+def test_windows_stop_script_preserves_pilot_data() -> None:
+    stopper = _read("deploy/pilot/stop-pilot.ps1")
+
+    assert "spravoshnik-epb-work" in stopper
+    assert "docker compose" in stopper or "& docker compose" in stopper
+    assert "stop" in stopper
+    assert "down -v" not in stopper
+    assert "volume rm" not in stopper.lower()
+    assert "MessageBox" in stopper
+
+
+def test_windows_shortcut_creator_hides_terminal_and_targets_launcher() -> None:
+    shortcuts = _read("deploy/pilot/create-desktop-shortcuts.ps1")
+
+    assert "WScript.Shell" in shortcuts
+    assert "Spravoshnik EPB.lnk" in shortcuts
+    assert "Остановить Spravoshnik EPB.lnk" in shortcuts
+    assert "start-pilot.ps1" in shortcuts
+    assert "stop-pilot.ps1" in shortcuts
+    assert "-WindowStyle Hidden" in shortcuts
+    assert "-ExecutionPolicy Bypass" in shortcuts
+    assert "WorkingDirectory" in shortcuts
 
 
 def test_runbook_contains_required_safety_guards() -> None:
