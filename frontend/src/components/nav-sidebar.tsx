@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { mainNav, settingsNav } from "@/components/nav-config";
 import { Logo } from "@/components/logo";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { BackendStatus } from "@/components/backend-status";
 
@@ -54,22 +53,6 @@ export function NavSidebar() {
                     )}
                   />
                   <span className="flex-1 truncate">{item.label}</span>
-                  {item.href === "/tasks" && (
-                    <Badge
-                      variant="secondary"
-                      className="h-5 min-w-[20px] justify-center rounded-full px-1.5 text-[10px] font-semibold"
-                    >
-                      7
-                    </Badge>
-                  )}
-                  {item.href === "/expertise" && (
-                    <Badge
-                      variant="secondary"
-                      className="h-5 min-w-[20px] justify-center rounded-full px-1.5 text-[10px] font-semibold"
-                    >
-                      4
-                    </Badge>
-                  )}
                 </Link>
               </li>
             );
