@@ -2,6 +2,7 @@ import uuid
 from datetime import date, timedelta
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.buildings.models import Building
@@ -263,6 +264,11 @@ class ExpertiseService:
             )
             db.commit()
             db.refresh(participant)
+        except IntegrityError as exc:
+            db.rollback()
+            raise ExpertiseDuplicateParticipantError(
+                "Сотрудник уже является участником экспертизы в этой роли"
+            ) from exc
         except Exception:
             db.rollback()
             raise
