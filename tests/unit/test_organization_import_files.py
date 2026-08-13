@@ -4,8 +4,8 @@ import zipfile
 import pytest
 
 from app.modules.organizations.import_files import (
-    UnsupportedImportFormatError,
     extract_local_import_text,
+    UnsupportedImportFormatError,
 )
 
 
