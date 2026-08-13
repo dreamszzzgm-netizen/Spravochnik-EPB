@@ -63,10 +63,7 @@ def _organization_or_404(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organization not found",
         )
-    if (
-        authorization is not None
-        and not can_access_organization(authorization, organization)
-    ):
+    if authorization is not None and not can_access_organization(authorization, organization):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Organization not found",
@@ -83,8 +80,7 @@ def read_organizations(
     db: Session = Depends(get_db),
 ):
     items, total = list_organizations_paginated(
-        db, q=q, page=page, page_size=page_size,
-        authorization=authorization,
+        db, q=q, page=page, page_size=page_size, authorization=authorization,
     )
     return OrganizationPaginatedResponse(
         items=items, total=total, page=page, page_size=page_size,
@@ -108,9 +104,7 @@ def create_organization(
 
     if (
         payload.parent_id is not None
-        and not can_reference_organizations(
-            authorization, payload.parent_id,
-        )
+        and not can_reference_organizations(authorization, payload.parent_id)
     ):
         raise HTTPException(
             status_code=404, detail="Organization not found",
@@ -126,9 +120,19 @@ def create_organization(
             parent_id=payload.parent_id,
             legal_address=payload.legal_address,
             actual_address=payload.actual_address,
+            residence_address=payload.residence_address,
             director_name=payload.director_name,
             phone=payload.phone,
             email=payload.email,
+            passport_series=payload.passport_series,
+            passport_number=payload.passport_number,
+            passport_issued_by=payload.passport_issued_by,
+            passport_issue_date=payload.passport_issue_date,
+            passport_department_code=payload.passport_department_code,
+            bank_name=payload.bank_name,
+            bank_bik=payload.bank_bik,
+            bank_account=payload.bank_account,
+            correspondent_account=payload.correspondent_account,
             comment=payload.comment,
             identifiers=(
                 [ident.model_dump() for ident in payload.identifiers]
@@ -170,9 +174,7 @@ def update_organization(
     if (
         "parent_id" in payload.model_fields_set
         and payload.parent_id is not None
-        and not can_reference_organizations(
-            authorization, payload.parent_id,
-        )
+        and not can_reference_organizations(authorization, payload.parent_id)
     ):
         raise HTTPException(
             status_code=404, detail="Organization not found",
@@ -189,9 +191,19 @@ def update_organization(
             parent_id=parent_id,
             legal_address=payload.legal_address,
             actual_address=payload.actual_address,
+            residence_address=payload.residence_address,
             director_name=payload.director_name,
             phone=payload.phone,
             email=payload.email,
+            passport_series=payload.passport_series,
+            passport_number=payload.passport_number,
+            passport_issued_by=payload.passport_issued_by,
+            passport_issue_date=payload.passport_issue_date,
+            passport_department_code=payload.passport_department_code,
+            bank_name=payload.bank_name,
+            bank_bik=payload.bank_bik,
+            bank_account=payload.bank_account,
+            correspondent_account=payload.correspondent_account,
             comment=payload.comment,
             identifiers=(
                 [ident.model_dump() for ident in payload.identifiers]
@@ -298,10 +310,7 @@ def set_primary_contact(
         db, organization_id, authorization,
     )
     contact = get_contact(db, contact_id)
-    if (
-        contact is None
-        or contact.organization_id != organization.id
-    ):
+    if contact is None or contact.organization_id != organization.id:
         raise HTTPException(
             status_code=404, detail="Contact not found",
         )
@@ -330,10 +339,7 @@ def update_contact(
         db, organization_id, authorization,
     )
     contact = get_contact(db, contact_id)
-    if (
-        contact is None
-        or contact.organization_id != organization.id
-    ):
+    if contact is None or contact.organization_id != organization.id:
         raise HTTPException(
             status_code=404, detail="Contact not found",
         )
@@ -440,10 +446,7 @@ def delete_identifier(
         db, organization_id, authorization,
     )
     identifier = get_identifier(db, identifier_id)
-    if (
-        identifier is None
-        or identifier.organization_id != organization.id
-    ):
+    if identifier is None or identifier.organization_id != organization.id:
         raise HTTPException(
             status_code=404, detail="Identifier not found",
         )
