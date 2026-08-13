@@ -1,23 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { ArrowLeft, Building2, Loader2, Pencil } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { ApiError } from "@/lib/api/errors";
 import { getOrganization, getOrganizationIdentifiers } from "@/lib/api/resources";
-import type { OrganizationResponse, OrganizationIdentifierResponse } from "@/lib/api/types";
+import type { OrganizationIdentifierResponse, OrganizationResponse } from "@/lib/api/types";
 import { organizationName, organizationTypeLabel } from "@/lib/api/view-models";
 import { useCan } from "@/lib/auth";
-import { OrganizationContacts } from "./_components/organization-contacts";
-import { OrganizationOpoList } from "./_components/organization-opo-list";
-import { OrganizationDeviceList } from "./_components/organization-device-list";
 import { OrganizationBuildingList } from "./_components/organization-building-list";
+import { OrganizationContacts } from "./_components/organization-contacts";
+import { OrganizationDeviceList } from "./_components/organization-device-list";
+import { OrganizationOpoList } from "./_components/organization-opo-list";
+
+function Detail({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <div>
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="text-sm font-medium">{value}</dd>
+    </div>
+  );
+}
 
 export default function OrganizationWorkspacePage() {
   const params = useParams();
@@ -30,11 +40,13 @@ export default function OrganizationWorkspacePage() {
 
   useEffect(() => {
     Promise.all([getOrganization(id), getOrganizationIdentifiers(id)])
-      .then(([o, i]) => {
-        setOrg(o);
-        setIdentifiers(i);
+      .then(([organization, organizationIdentifiers]) => {
+        setOrg(organization);
+        setIdentifiers(organizationIdentifiers);
       })
-      .catch((e) => setError(e instanceof ApiError ? e.detail : "Ошибка загрузки"))
+      .catch((caught: unknown) => {
+        setError(caught instanceof ApiError ? caught.detail : "Ошибка загрузки");
+      })
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -55,14 +67,18 @@ export default function OrganizationWorkspacePage() {
   }
 
   const identMap = Object.fromEntries(
-    identifiers.map((i) => [i.identifier_type, i.identifier_value]),
+    identifiers.map((identifier) => [identifier.identifier_type, identifier.identifier_value]),
+  );
+  const isIp = org.organization_type === "individual_entrepreneur";
+  const hasBankDetails = Boolean(
+    org.bank_name || org.bank_bik || org.bank_account || org.correspondent_account,
   );
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="icon" asChild>
-          <Link href="/organizations">
+          <Link href="/organizations" aria-label="К списку организаций">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
@@ -99,75 +115,33 @@ export default function OrganizationWorkspacePage() {
           <TabsTrigger value="contracts">Договоры</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="mt-4">
+        <TabsContent value="general" className="mt-4 space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Общие сведения</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Общие сведения</CardTitle></CardHeader>
             <CardContent>
               <dl className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Полное наименование</dt>
-                  <dd className="text-sm font-medium">{org.legal_name}</dd>
-                </div>
-                {org.short_name && (
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Краткое наименование</dt>
-                    <dd className="text-sm font-medium">{org.short_name}</dd>
-                  </div>
-                )}
-                {org.director_name && (
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Директор</dt>
-                    <dd className="text-sm font-medium">{org.director_name}</dd>
-                  </div>
-                )}
-                {org.phone && (
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Телефон</dt>
-                    <dd className="text-sm font-medium">{org.phone}</dd>
-                  </div>
-                )}
-                {org.email && (
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Email</dt>
-                    <dd className="text-sm font-medium">{org.email}</dd>
-                  </div>
-                )}
-                {org.legal_address && (
-                  <div className="sm:col-span-2">
-                    <dt className="text-xs text-muted-foreground">Юридический адрес</dt>
-                    <dd className="text-sm font-medium">{org.legal_address}</dd>
-                  </div>
-                )}
-                {org.actual_address && (
-                  <div className="sm:col-span-2">
-                    <dt className="text-xs text-muted-foreground">Фактический адрес</dt>
-                    <dd className="text-sm font-medium">{org.actual_address}</dd>
-                  </div>
-                )}
+                <Detail label={isIp ? "ФИО индивидуального предпринимателя" : "Полное наименование"} value={org.legal_name} />
+                <Detail label="Краткое наименование" value={org.short_name} />
+                {!isIp && <Detail label="Руководитель" value={org.director_name} />}
+                <Detail label="Телефон" value={org.phone} />
+                <Detail label="Email" value={org.email} />
+                {!isIp && <Detail label="Юридический адрес" value={org.legal_address} />}
+                {!isIp && <Detail label="Фактический адрес" value={org.actual_address} />}
+                {isIp && <Detail label="Место жительства" value={org.residence_address} />}
               </dl>
+
               {(identMap.inn || identMap.kpp || identMap.ogrn || identMap.ogrnip) && (
                 <div className="mt-6">
-                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
-                    Реквизиты
-                  </p>
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Реквизиты</p>
                   <div className="flex flex-wrap gap-2">
-                    {identMap.inn && (
-                      <Badge variant="secondary">ИНН {identMap.inn}</Badge>
-                    )}
-                    {identMap.kpp && (
-                      <Badge variant="secondary">КПП {identMap.kpp}</Badge>
-                    )}
-                    {identMap.ogrn && (
-                      <Badge variant="secondary">ОГРН {identMap.ogrn}</Badge>
-                    )}
-                    {identMap.ogrnip && (
-                      <Badge variant="secondary">ОГРНИП {identMap.ogrnip}</Badge>
-                    )}
+                    {identMap.inn && <Badge variant="secondary">ИНН {identMap.inn}</Badge>}
+                    {!isIp && identMap.kpp && <Badge variant="secondary">КПП {identMap.kpp}</Badge>}
+                    {!isIp && identMap.ogrn && <Badge variant="secondary">ОГРН {identMap.ogrn}</Badge>}
+                    {isIp && identMap.ogrnip && <Badge variant="secondary">ОГРНИП {identMap.ogrnip}</Badge>}
                   </div>
                 </div>
               )}
+
               {org.comment && (
                 <div className="mt-4">
                   <dt className="text-xs text-muted-foreground">Примечание</dt>
@@ -176,33 +150,58 @@ export default function OrganizationWorkspacePage() {
               )}
             </CardContent>
           </Card>
+
+          {org.organization_type === "individual_entrepreneur" && (
+            <Card>
+              <CardHeader><CardTitle>Паспортные данные</CardTitle></CardHeader>
+              <CardContent>
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  <Detail
+                    label="Серия и номер"
+                    value={[org.passport_series, org.passport_number].filter(Boolean).join(" ") || null}
+                  />
+                  <Detail label="Дата выдачи" value={org.passport_issue_date} />
+                  <Detail label="Код подразделения" value={org.passport_department_code} />
+                  <Detail label="Кем выдан" value={org.passport_issued_by} />
+                </dl>
+              </CardContent>
+            </Card>
+          )}
+
+          {hasBankDetails && (
+            <Card>
+              <CardHeader><CardTitle>Банковские реквизиты</CardTitle></CardHeader>
+              <CardContent>
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  <Detail label="Банк" value={org.bank_name} />
+                  <Detail label="БИК" value={org.bank_bik} />
+                  <Detail label="Расчётный счёт" value={org.bank_account} />
+                  <Detail label="Корреспондентский счёт" value={org.correspondent_account} />
+                </dl>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="contacts" className="mt-4">
           <OrganizationContacts organizationId={id} />
         </TabsContent>
-
         <TabsContent value="opo" className="mt-4">
           <OrganizationOpoList organizationId={id} />
         </TabsContent>
-
         <TabsContent value="devices" className="mt-4">
           <OrganizationDeviceList organizationId={id} />
         </TabsContent>
-
         <TabsContent value="buildings" className="mt-4">
           <OrganizationBuildingList organizationId={id} />
         </TabsContent>
-
-        {["contracts"].map((tab) => (
-          <TabsContent key={tab} value={tab} className="mt-4">
-            <Card>
-              <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                Раздел будет подключён на следующем этапе
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ))}
+        <TabsContent value="contracts" className="mt-4">
+          <Card>
+            <CardContent className="py-12 text-center text-sm text-muted-foreground">
+              Раздел будет подключён на следующем этапе
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );
