@@ -86,6 +86,30 @@ class OrganizationUpdateWithIdentifiers(OrganizationUpdate):
     identifiers: list[OrganizationIdentifierUpsert] | None = None
 
 
+class OrganizationImportPreviewRequest(BaseModel):
+    text: str = Field(min_length=10, max_length=20_000)
+
+
+class OrganizationImportCandidateResponse(BaseModel):
+    organization_type: OrganizationType
+    legal_name: str | None = None
+    short_name: str | None = None
+    legal_address: str | None = None
+    actual_address: str | None = None
+    residence_address: str | None = None
+    director_name: str | None = None
+    passport_details: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    identifiers: list[OrganizationIdentifierUpsert] = []
+
+
+class OrganizationImportPreviewResponse(BaseModel):
+    candidate: OrganizationImportCandidateResponse
+    warnings: list[str] = []
+    duplicate_warnings: list[str] = []
+
+
 class OrganizationContactCreate(BaseModel):
     contact_type: ContactType = ContactType.OTHER
     full_name: str = Field(min_length=1, max_length=255)
