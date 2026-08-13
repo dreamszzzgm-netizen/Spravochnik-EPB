@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
+    Text,
     UniqueConstraint,
     func,
     text,
@@ -42,7 +43,9 @@ class Organization(Base):
     short_name: Mapped[str | None] = mapped_column(String(120))
     legal_address: Mapped[str | None] = mapped_column(String(500))
     actual_address: Mapped[str | None] = mapped_column(String(500))
+    residence_address: Mapped[str | None] = mapped_column(String(500))
     director_name: Mapped[str | None] = mapped_column(String(255))
+    passport_details: Mapped[str | None] = mapped_column(Text)
     phone: Mapped[str | None] = mapped_column(String(64))
     email: Mapped[str | None] = mapped_column(String(320))
     comment: Mapped[str | None] = mapped_column(String)
