@@ -24,6 +24,26 @@ import type {
 
 type ResourceOptions = { signal?: AbortSignal };
 
+export interface ManagementReportResponse {
+  organizations_total: number;
+  contracts: {
+    total: number;
+    active: number;
+    completed: number;
+    terminated: number;
+  };
+  tasks: {
+    total: number;
+    new: number;
+    in_progress: number;
+    completed: number;
+    cancelled: number;
+    overdue: number;
+  };
+  documents: { source_available: boolean };
+  expertises: { source_available: boolean };
+}
+
 export const getHealth = (options: ResourceOptions = {}) => apiRequest<HealthResponse>("/health/live", options);
 export const getCurrentUser = (options: ResourceOptions = {}) => apiRequest<CurrentUserResponse>("/api/auth/me", options);
 export const login = (username: string, password: string) =>
@@ -45,6 +65,9 @@ export const getOrganizations = (params: { q?: string; page?: number; page_size?
   return apiRequest<OrganizationPaginatedResponse>(`/api/organizations${qs ? `?${qs}` : ""}`, { signal: params.signal });
 };
 export const logout = () => apiRequest<void>("/api/auth/logout", { method: "POST" });
+
+export const getManagementReport = (options: ResourceOptions = {}) =>
+  apiRequest<ManagementReportResponse>("/api/reports/management", options);
 
 export const createOrganization = (payload: OrganizationCreatePayload) =>
   apiRequest<OrganizationResponse>("/api/organizations", {
