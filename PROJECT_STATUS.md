@@ -43,6 +43,19 @@
   - audit events cover template creation, version creation, publication and instantiation;
   - migration, service, transaction, instantiation, authorization and API coverage added.
 
+## Organization Smart Import — base + hardening integrated
+
+Integration branch: `agent/integration-cp52-smart-import-hardening` (local merge of CP5.2 + Smart Import base + Smart Import hardening; merge commit `3415cf2`).
+
+- CP5.2 Workflow Engine: **complete** (`agent/stage5-cp52-workflow-engine`).
+- Organization Smart Import base: **integrated** — migration re-chained as `0015_org_legal_form_fields`.
+- Organization Smart Import hardening: **integrated** (`agent/parallel-org-smart-import-hardening`, PR #13) — legal-form-aware fields, server-side legal-form rules, read-only import preview pipeline, local OCR adapter, hardened create/edit routes served through a Next.js proxy while user URLs stay `/organizations/new` and `/organizations/[id]/edit`.
+- Alembic: **single head** `0015_org_legal_form_fields`; linear chain `0013_stage5_tasks_core -> 0014_stage5_workflow_engine -> 0015_org_legal_form_fields`.
+- Backend regression on disposable test PostgreSQL (port `5433`): **579 passed / 0 skipped / 0 failed**; `ruff check app tests` PASS.
+- Frontend: lint PASS, typecheck PASS, tests **80 passed**, production build PASS.
+- OCR runtime: local Tesseract **not installed** (`OCR_RUNTIME_AVAILABLE = NO`); OCR code is green via mocks/stubs, `TESSERACT_CMD`/`TESSERACT_LANG` documented in `.env.example`.
+- Reports/Documents (`agent/reports-document-control-ready`): **NOT YET INTEGRATED** — deferred to the next stage (Issue #15).
+
 ## Stage 5 boundary / deferred work
 
 ### CP5.3 — Contract ↔ Tasks integration
