@@ -11,7 +11,9 @@ from app.modules.identity.authorization import (
     can_reference_organizations,
 )
 from app.modules.identity.dependencies import require_scoped_permission
+from app.modules.organizations.importer import parse_organization_requisites
 from app.modules.organizations.repository import (
+    find_identifier_by_type_and_value,
     get_contact,
     get_identifier,
     get_organization,
@@ -25,6 +27,10 @@ from app.modules.organizations.schemas import (
     OrganizationCreateWithIdentifiers,
     OrganizationIdentifierCreate,
     OrganizationIdentifierResponse,
+    OrganizationIdentifierUpsert,
+    OrganizationImportCandidateResponse,
+    OrganizationImportPreviewRequest,
+    OrganizationImportPreviewResponse,
     OrganizationPaginatedResponse,
     OrganizationResponse,
     OrganizationUpdateWithIdentifiers,
@@ -55,22 +61,11 @@ def _organization_or_404(
     *,
     include_deleted: bool = False,
 ):
-    organization = get_organization(
-        db, organization_id, include_deleted=include_deleted,
-    )
+    organization = get_organization(db, organization_id, include_deleted=include_deleted)
     if organization is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found",
-        )
-    if (
-        authorization is not None
-        and not can_access_organization(authorization, organization)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Organization not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    if authorization is not None and not can_access_organization(authorization, organization):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
     return organization
 
 
@@ -83,38 +78,72 @@ def read_organizations(
     db: Session = Depends(get_db),
 ):
     items, total = list_organizations_paginated(
-        db, q=q, page=page, page_size=page_size,
-        authorization=authorization,
+        db, q=q, page=page, page_size=page_size, authorization=authorization
     )
-    return OrganizationPaginatedResponse(
-        items=items, total=total, page=page, page_size=page_size,
+    return OrganizationPaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post("/import-preview", response_model=OrganizationImportPreviewResponse)
+def preview_organization_import(
+    payload: OrganizationImportPreviewRequest,
+    authorization: AuthorizationContext = _dep_create,
+    db: Session = Depends(get_db),
+):
+    if not can_create_organization(authorization):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+    parsed = parse_organization_requisites(payload.text)
+    identifiers = [
+        OrganizationIdentifierUpsert(
+            identifier_type=identifier_type,
+            identifier_value=value,
+            is_primary=identifier_type.value == "inn",
+        )
+        for identifier_type, value in parsed.identifiers.items()
+    ]
+    duplicate_warnings: list[str] = []
+    for identifier in identifiers:
+        existing = find_identifier_by_type_and_value(
+            db,
+            identifier_type=identifier.identifier_type,
+            identifier_value=identifier.identifier_value,
+        )
+        if existing is not None:
+            duplicate_warnings.append(
+                f"{identifier.identifier_type.value.upper()} {identifier.identifier_value} уже используется"
+            )
+
+    return OrganizationImportPreviewResponse(
+        candidate=OrganizationImportCandidateResponse(
+            organization_type=parsed.organization_type,
+            legal_name=parsed.legal_name,
+            short_name=parsed.short_name,
+            legal_address=parsed.legal_address,
+            actual_address=parsed.actual_address,
+            residence_address=parsed.residence_address,
+            director_name=parsed.director_name,
+            passport_details=parsed.passport_details,
+            phone=parsed.phone,
+            email=parsed.email,
+            identifiers=identifiers,
+        ),
+        warnings=parsed.warnings,
+        duplicate_warnings=duplicate_warnings,
     )
 
 
-@router.post(
-    "", response_model=OrganizationResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(
     payload: OrganizationCreateWithIdentifiers,
     authorization: AuthorizationContext = _dep_create,
     db: Session = Depends(get_db),
 ):
     if not can_create_organization(authorization):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Permission denied",
-        )
-
-    if (
-        payload.parent_id is not None
-        and not can_reference_organizations(
-            authorization, payload.parent_id,
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    if payload.parent_id is not None and not can_reference_organizations(
+        authorization, payload.parent_id
     ):
-        raise HTTPException(
-            status_code=404, detail="Organization not found",
-        )
+        raise HTTPException(status_code=404, detail="Organization not found")
 
     try:
         return service.create_organization(
@@ -126,7 +155,9 @@ def create_organization(
             parent_id=payload.parent_id,
             legal_address=payload.legal_address,
             actual_address=payload.actual_address,
+            residence_address=payload.residence_address,
             director_name=payload.director_name,
+            passport_details=payload.passport_details,
             phone=payload.phone,
             email=payload.email,
             comment=payload.comment,
@@ -137,9 +168,7 @@ def create_organization(
             ),
         )
     except OrganizationNotFoundError as exc:
-        raise HTTPException(
-            status_code=400, detail=str(exc),
-        ) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/{organization_id}", response_model=OrganizationResponse)
@@ -158,25 +187,14 @@ def update_organization(
     authorization: AuthorizationContext = _dep_update,
     db: Session = Depends(get_db),
 ):
-    organization = _organization_or_404(
-        db, organization_id, authorization,
-    )
-
-    parent_id = (
-        payload.parent_id
-        if "parent_id" in payload.model_fields_set
-        else organization.parent_id
-    )
+    organization = _organization_or_404(db, organization_id, authorization)
+    parent_id = payload.parent_id if "parent_id" in payload.model_fields_set else organization.parent_id
     if (
         "parent_id" in payload.model_fields_set
         and payload.parent_id is not None
-        and not can_reference_organizations(
-            authorization, payload.parent_id,
-        )
+        and not can_reference_organizations(authorization, payload.parent_id)
     ):
-        raise HTTPException(
-            status_code=404, detail="Organization not found",
-        )
+        raise HTTPException(status_code=404, detail="Organization not found")
 
     try:
         return service.update_organization(
@@ -189,7 +207,9 @@ def update_organization(
             parent_id=parent_id,
             legal_address=payload.legal_address,
             actual_address=payload.actual_address,
+            residence_address=payload.residence_address,
             director_name=payload.director_name,
+            passport_details=payload.passport_details,
             phone=payload.phone,
             email=payload.email,
             comment=payload.comment,
@@ -200,47 +220,30 @@ def update_organization(
             ),
         )
     except OrganizationNotFoundError as exc:
-        raise HTTPException(
-            status_code=400, detail=str(exc),
-        ) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete(
-    "/{organization_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
+@router.delete("/{organization_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_organization(
     organization_id: uuid.UUID,
     authorization: AuthorizationContext = _dep_delete,
     db: Session = Depends(get_db),
 ):
-    organization = _organization_or_404(
-        db, organization_id, authorization,
-    )
-    service.delete_organization(
-        db, actor_id=authorization.user_id,
-        organization=organization,
-    )
+    organization = _organization_or_404(db, organization_id, authorization)
+    service.delete_organization(db, actor_id=authorization.user_id, organization=organization)
     return None
 
 
-@router.post(
-    "/{organization_id}/restore",
-    response_model=OrganizationResponse,
-)
+@router.post("/{organization_id}/restore", response_model=OrganizationResponse)
 def restore_organization(
     organization_id: uuid.UUID,
     authorization: AuthorizationContext = _dep_restore,
     db: Session = Depends(get_db),
 ):
     organization = _organization_or_404(
-        db, organization_id, authorization,
-        include_deleted=True,
+        db, organization_id, authorization, include_deleted=True
     )
-    service.restore_organization(
-        db, actor_id=authorization.user_id,
-        organization=organization,
-    )
+    service.restore_organization(db, actor_id=authorization.user_id, organization=organization)
     return organization
 
 
@@ -255,9 +258,7 @@ def create_contact(
     authorization: AuthorizationContext = _dep_contacts,
     db: Session = Depends(get_db),
 ):
-    organization = _organization_or_404(
-        db, organization_id, authorization,
-    )
+    organization = _organization_or_404(db, organization_id, authorization)
     return service.add_contact(
         db,
         actor_id=authorization.user_id,
@@ -271,10 +272,7 @@ def create_contact(
     )
 
 
-@router.get(
-    "/{organization_id}/contacts",
-    response_model=list[OrganizationContactResponse],
-)
+@router.get("/{organization_id}/contacts", response_model=list[OrganizationContactResponse])
 def read_contacts(
     organization_id: uuid.UUID,
     authorization: AuthorizationContext = _dep_view,
@@ -294,25 +292,14 @@ def set_primary_contact(
     authorization: AuthorizationContext = _dep_contacts,
     db: Session = Depends(get_db),
 ):
-    organization = _organization_or_404(
-        db, organization_id, authorization,
-    )
+    organization = _organization_or_404(db, organization_id, authorization)
     contact = get_contact(db, contact_id)
-    if (
-        contact is None
-        or contact.organization_id != organization.id
-    ):
-        raise HTTPException(
-            status_code=404, detail="Contact not found",
-        )
+    if contact is None or contact.organization_id != organization.id:
+        raise HTTPException(status_code=404, detail="Contact not found")
     try:
-        return service.set_primary_contact(
-            db, actor_id=authorization.user_id, contact=contact,
-        )
+        return service.set_primary_contact(db, actor_id=authorization.user_id, contact=contact)
     except ContactNotFoundError as exc:
-        raise HTTPException(
-            status_code=404, detail=str(exc),
-        ) from exc
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.patch(
@@ -326,21 +313,12 @@ def update_contact(
     authorization: AuthorizationContext = _dep_contacts,
     db: Session = Depends(get_db),
 ):
-    organization = _organization_or_404(
-        db, organization_id, authorization,
-    )
+    organization = _organization_or_404(db, organization_id, authorization)
     contact = get_contact(db, contact_id)
-    if (
-        contact is None
-        or contact.organization_id != organization.id
-    ):
-        raise HTTPException(
-            status_code=404, detail="Contact not found",
-        )
+    if contact is None or contact.organization_id != organization.id:
+        raise HTTPException(status_code=404, detail="Contact not found")
     if contact.deleted_at is not None:
-        raise HTTPException(
-            status_code=404, detail="Contact not found",
-        )
+        raise HTTPException(status_code=404, detail="Contact not found")
     contact.contact_type = payload.contact_type
     contact.full_name = payload.full_name
     contact.position = payload.position
@@ -366,21 +344,15 @@ def delete_contact(
     authorization: AuthorizationContext = _dep_contacts,
     db: Session = Depends(get_db),
 ):
-    organization = _organization_or_404(
-        db, organization_id, authorization,
-    )
+    organization = _organization_or_404(db, organization_id, authorization)
     contact = get_contact(db, contact_id)
     if (
         contact is None
         or contact.organization_id != organization.id
         or contact.deleted_at is not None
     ):
-        raise HTTPException(
-            status_code=404, detail="Contact not found",
-        )
-    service.remove_contact(
-        db, actor_id=authorization.user_id, contact=contact,
-    )
+        raise HTTPException(status_code=404, detail="Contact not found")
+    service.remove_contact(db, actor_id=authorization.user_id, contact=contact)
     return None
 
 
@@ -395,9 +367,7 @@ def create_identifier(
     authorization: AuthorizationContext = _dep_identifiers,
     db: Session = Depends(get_db),
 ):
-    organization = _organization_or_404(
-        db, organization_id, authorization,
-    )
+    organization = _organization_or_404(db, organization_id, authorization)
     try:
         return service.add_identifier(
             db,
@@ -408,15 +378,10 @@ def create_identifier(
             is_primary=payload.is_primary,
         )
     except OrganizationConflictError as exc:
-        raise HTTPException(
-            status_code=409, detail=str(exc),
-        ) from exc
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.get(
-    "/{organization_id}/identifiers",
-    response_model=list[OrganizationIdentifierResponse],
-)
+@router.get("/{organization_id}/identifiers", response_model=list[OrganizationIdentifierResponse])
 def read_identifiers(
     organization_id: uuid.UUID,
     authorization: AuthorizationContext = _dep_view,
@@ -436,19 +401,9 @@ def delete_identifier(
     authorization: AuthorizationContext = _dep_identifiers,
     db: Session = Depends(get_db),
 ):
-    organization = _organization_or_404(
-        db, organization_id, authorization,
-    )
+    organization = _organization_or_404(db, organization_id, authorization)
     identifier = get_identifier(db, identifier_id)
-    if (
-        identifier is None
-        or identifier.organization_id != organization.id
-    ):
-        raise HTTPException(
-            status_code=404, detail="Identifier not found",
-        )
-    service.remove_identifier(
-        db, actor_id=authorization.user_id,
-        identifier=identifier,
-    )
+    if identifier is None or identifier.organization_id != organization.id:
+        raise HTTPException(status_code=404, detail="Identifier not found")
+    service.remove_identifier(db, actor_id=authorization.user_id, identifier=identifier)
     return None
