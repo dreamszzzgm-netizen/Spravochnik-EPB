@@ -45,15 +45,15 @@ function Get-PilotHttpPort {
 
 try {
     if (-not (Test-Path -LiteralPath $EnvFile)) {
-        throw "Не найден файл настроек Pilot:`n$EnvFile`n`nОбратитесь к администратору."
+        throw "Pilot settings file was not found:`n$EnvFile`n`nPlease contact the administrator."
     }
 
     if (-not (Test-Path -LiteralPath $ComposeFile)) {
-        throw "Не найден файл docker-compose.pilot.yml.`n`nОбратитесь к администратору."
+        throw "docker-compose.pilot.yml was not found.`n`nPlease contact the administrator."
     }
 
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        throw "Docker не установлен или недоступен.`n`nУстановите Docker Desktop или обратитесь к администратору."
+        throw "Docker is not installed or is not available in PATH.`n`nPlease contact the administrator."
     }
 
     if (-not (Test-DockerEngine)) {
@@ -66,7 +66,7 @@ try {
             Select-Object -First 1
 
         if (-not $dockerDesktop) {
-            throw "Docker Desktop не запущен, и программа Docker Desktop.exe не найдена.`n`nЗапустите Docker Desktop вручную или обратитесь к администратору."
+            throw "Docker Desktop is not running and Docker Desktop.exe was not found.`n`nPlease start Docker Desktop manually or contact the administrator."
         }
 
         Start-Process -FilePath $dockerDesktop | Out-Null
@@ -81,7 +81,7 @@ try {
         }
 
         if (-not $dockerReady) {
-            throw "Docker Desktop запущен, но Docker Engine не стал доступен.`n`nПопробуйте перезапустить Docker Desktop или обратитесь к администратору."
+            throw "Docker Desktop started, but Docker Engine did not become ready.`n`nPlease restart Docker Desktop or contact the administrator."
         }
     }
 
@@ -94,7 +94,7 @@ try {
             up -d
 
         if ($LASTEXITCODE -ne 0) {
-            throw "Не удалось запустить контейнеры Spravoshnik EPB."
+            throw "Spravoshnik EPB containers could not be started."
         }
     }
     finally {
@@ -121,7 +121,7 @@ try {
     }
 
     if (-not $applicationReady) {
-        throw "Spravoshnik EPB запущен, но веб-интерфейс не стал доступен.`n`nОбратитесь к администратору."
+        throw "Spravoshnik EPB started, but the web interface did not become ready.`n`nPlease contact the administrator."
     }
 
     Start-Process $appUrl | Out-Null
