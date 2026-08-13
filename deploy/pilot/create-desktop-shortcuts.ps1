@@ -31,24 +31,24 @@ function New-PilotShortcut {
 
 try {
     if (-not (Test-Path -LiteralPath $StartScript)) {
-        throw "Не найден start-pilot.ps1. Обратитесь к администратору."
+        throw "start-pilot.ps1 was not found. Please contact the administrator."
     }
     if (-not (Test-Path -LiteralPath $StopScript)) {
-        throw "Не найден stop-pilot.ps1. Обратитесь к администратору."
+        throw "stop-pilot.ps1 was not found. Please contact the administrator."
     }
 
     New-PilotShortcut `
         -Name "Spravoshnik EPB.lnk" `
         -ScriptPath $StartScript `
-        -Description "Запустить Spravoshnik EPB"
+        -Description "Start Spravoshnik EPB"
 
     New-PilotShortcut `
-        -Name "Остановить Spravoshnik EPB.lnk" `
+        -Name "Stop Spravoshnik EPB.lnk" `
         -ScriptPath $StopScript `
-        -Description "Остановить Spravoshnik EPB без удаления данных"
+        -Description "Stop Spravoshnik EPB without deleting data"
 
     [System.Windows.Forms.MessageBox]::Show(
-        "Ярлыки Spravoshnik EPB созданы на рабочем столе.",
+        "Spravoshnik EPB shortcuts were created on the desktop.",
         "Spravoshnik EPB",
         [System.Windows.Forms.MessageBoxButtons]::OK,
         [System.Windows.Forms.MessageBoxIcon]::Information
