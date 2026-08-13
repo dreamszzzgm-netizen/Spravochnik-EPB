@@ -1,8 +1,23 @@
 # ruff: noqa: I001
 
+import io
+import zipfile
+
 from app.modules.organizations.enums import IdentifierType, OrganizationType
-from app.modules.organizations.importer import parse_organization_requisites
+from app.modules.organizations.importer import (
+    UnsupportedImportFormatError,
+    extract_local_import_text,
+    parse_organization_requisites,
+)
 from app.modules.organizations.schemas import OrganizationCreate
+
+
+def _office_zip(files: dict[str, str]) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path, content in files.items():
+            archive.writestr(path, content)
+    return buffer.getvalue()
 
 
 def test_ip_schema_accepts_residence_and_passport_fields() -> None:
@@ -69,3 +84,54 @@ def test_parser_extracts_legal_entity_requisites_without_ip_fields() -> None:
         IdentifierType.KPP: "770101001",
         IdentifierType.OGRN: "1027700123456",
     }
+
+
+def test_legal_form_validation_contract_is_available() -> None:
+    from app.modules.organizations.service import validate_organization_legal_form
+
+    assert callable(validate_organization_legal_form)
+
+
+def test_local_file_import_extracts_txt_docx_and_xlsx() -> None:
+    assert "ООО Тест" in extract_local_import_text(
+        "card.txt", "text/plain", "ООО Тест\nИНН: 7701234567".encode()
+    )
+
+    docx = _office_zip(
+        {
+            "word/document.xml": """<?xml version='1.0' encoding='UTF-8'?>
+            <w:document xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main'>
+              <w:body><w:p><w:r><w:t>ООО DOCX</w:t></w:r></w:p></w:body>
+            </w:document>"""
+        }
+    )
+    assert "ООО DOCX" in extract_local_import_text(
+        "card.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        docx,
+    )
+
+    xlsx = _office_zip(
+        {
+            "xl/worksheets/sheet1.xml": """<?xml version='1.0' encoding='UTF-8'?>
+            <worksheet xmlns='http://schemas.openxmlformats.org/spreadsheetml/2006/main'>
+              <sheetData><row>
+                <c t='inlineStr'><is><t>ИНН</t></is></c>
+                <c t='inlineStr'><is><t>7701234567</t></is></c>
+              </row></sheetData>
+            </worksheet>"""
+        }
+    )
+    assert "ИНН: 7701234567" in extract_local_import_text(
+        "card.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        xlsx,
+    )
+
+
+def test_local_file_import_rejects_unknown_format() -> None:
+    try:
+        extract_local_import_text("card.bin", "application/octet-stream", b"binary")
+    except UnsupportedImportFormatError:
+        return
+    raise AssertionError("Unknown import format was accepted")

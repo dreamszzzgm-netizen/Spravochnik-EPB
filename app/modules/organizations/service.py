@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.identity.audit import write_audit
+from app.modules.organizations.enums import IdentifierType, OrganizationType
 from app.modules.organizations.models import (
     Organization,
     OrganizationContact,
@@ -31,6 +32,57 @@ class IdentifierNotFoundError(Exception):
 
 class OrganizationConflictError(Exception):
     pass
+
+
+class OrganizationLegalFormError(ValueError):
+    pass
+
+
+def _has_value(value: str | None) -> bool:
+    return value is not None and bool(value.strip())
+
+
+def _identifier_types(
+    identifiers: list[dict[str, str | bool]] | None,
+) -> set[IdentifierType]:
+    result: set[IdentifierType] = set()
+    for identifier in identifiers or []:
+        raw = identifier.get("identifier_type")
+        if isinstance(raw, IdentifierType):
+            result.add(raw)
+        elif raw is not None:
+            result.add(IdentifierType(str(raw)))
+    return result
+
+
+def validate_organization_legal_form(
+    organization_type: OrganizationType,
+    *,
+    legal_address: str | None,
+    actual_address: str | None,
+    director_name: str | None,
+    residence_address: str | None,
+    passport_details: str | None,
+    identifiers: list[dict[str, str | bool]] | None,
+) -> None:
+    """Reject fields/identifiers that do not apply to the selected legal form."""
+    identifier_types = _identifier_types(identifiers)
+    if organization_type is OrganizationType.INDIVIDUAL_ENTREPRENEUR:
+        if any(_has_value(value) for value in (legal_address, actual_address, director_name)):
+            raise OrganizationLegalFormError(
+                "Для ИП нельзя указывать юридический/фактический адрес или директора"
+            )
+        forbidden = identifier_types & {IdentifierType.KPP, IdentifierType.OGRN}
+        if forbidden:
+            raise OrganizationLegalFormError("Для ИП допустимы ИНН и ОГРНИП")
+        return
+
+    if _has_value(residence_address) or _has_value(passport_details):
+        raise OrganizationLegalFormError(
+            "Место жительства и паспортные данные допустимы только для ИП"
+        )
+    if IdentifierType.OGRNIP in identifier_types:
+        raise OrganizationLegalFormError("ОГРНИП допустим только для ИП")
 
 
 class OrganizationService:
@@ -87,6 +139,15 @@ class OrganizationService:
         comment: str | None = None,
         identifiers: list[dict[str, str | bool]] | None = None,
     ) -> Organization:
+        validate_organization_legal_form(
+            organization_type,
+            legal_address=legal_address,
+            actual_address=actual_address,
+            director_name=director_name,
+            residence_address=residence_address,
+            passport_details=passport_details,
+            identifiers=identifiers,
+        )
         if parent_id is not None:
             parent = get_organization(db, parent_id)
             if parent is None:
@@ -144,6 +205,16 @@ class OrganizationService:
         comment: str | None = None,
         identifiers: list[dict[str, str | bool]] | None = None,
     ) -> Organization:
+        target_type = organization_type or organization.organization_type
+        validate_organization_legal_form(
+            target_type,
+            legal_address=legal_address,
+            actual_address=actual_address,
+            director_name=director_name,
+            residence_address=residence_address,
+            passport_details=passport_details,
+            identifiers=identifiers,
+        )
         if parent_id is not None and parent_id != organization.id:
             parent = get_organization(db, parent_id)
             if parent is None:
@@ -155,12 +226,24 @@ class OrganizationService:
         if short_name is not None and short_name != organization.short_name:
             organization.short_name = short_name
             changed.append("short_name")
-        if organization_type is not None:
+        if organization_type is not None and organization_type != organization.organization_type:
             organization.organization_type = organization_type
             changed.append("organization_type")
         if parent_id != organization.parent_id:
             organization.parent_id = parent_id
             changed.append("parent_id")
+
+        if target_type is OrganizationType.INDIVIDUAL_ENTREPRENEUR:
+            for field in ("legal_address", "actual_address", "director_name"):
+                if getattr(organization, field) is not None:
+                    setattr(organization, field, None)
+                    changed.append(field)
+        else:
+            for field in ("residence_address", "passport_details"):
+                if getattr(organization, field) is not None:
+                    setattr(organization, field, None)
+                    changed.append(field)
+
         if legal_address is not None and legal_address != organization.legal_address:
             organization.legal_address = legal_address
             changed.append("legal_address")
@@ -329,6 +412,21 @@ class OrganizationService:
         identifier_value: str,
         is_primary: bool,
     ) -> OrganizationIdentifier:
+        validate_organization_legal_form(
+            organization.organization_type,
+            legal_address=organization.legal_address,
+            actual_address=organization.actual_address,
+            director_name=organization.director_name,
+            residence_address=organization.residence_address,
+            passport_details=organization.passport_details,
+            identifiers=[
+                {
+                    "identifier_type": identifier_type,
+                    "identifier_value": identifier_value,
+                    "is_primary": is_primary,
+                }
+            ],
+        )
         identifier = OrganizationIdentifier(
             organization_id=organization.id,
             identifier_type=identifier_type,

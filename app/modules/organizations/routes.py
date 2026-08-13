@@ -1,6 +1,7 @@
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
@@ -11,7 +12,14 @@ from app.modules.identity.authorization import (
     can_reference_organizations,
 )
 from app.modules.identity.dependencies import require_scoped_permission
-from app.modules.organizations.importer import parse_organization_requisites
+from app.modules.organizations.importer import (
+    InvalidImportFileError,
+    LocalOcrUnavailableError,
+    OrganizationImportCandidate,
+    UnsupportedImportFormatError,
+    extract_local_import_text,
+    parse_organization_requisites,
+)
 from app.modules.organizations.repository import (
     find_identifier_by_type_and_value,
     get_contact,
@@ -38,6 +46,7 @@ from app.modules.organizations.schemas import (
 from app.modules.organizations.service import (
     ContactNotFoundError,
     OrganizationConflictError,
+    OrganizationLegalFormError,
     OrganizationNotFoundError,
     OrganizationService,
 )
@@ -52,6 +61,7 @@ _dep_delete = Depends(require_scoped_permission("organizations.delete"))  # noqa
 _dep_restore = Depends(require_scoped_permission("organizations.restore"))  # noqa: B008
 _dep_contacts = Depends(require_scoped_permission("organizations.manage_contacts"))  # noqa: B008
 _dep_identifiers = Depends(require_scoped_permission("organizations.manage_identifiers"))  # noqa: B008
+_MAX_IMPORT_BYTES = 5 * 1024 * 1024
 
 
 def _organization_or_404(
@@ -69,30 +79,10 @@ def _organization_or_404(
     return organization
 
 
-@router.get("", response_model=OrganizationPaginatedResponse)
-def read_organizations(
-    q: str = "",
-    page: int = 1,
-    page_size: int = 20,
-    authorization: AuthorizationContext = _dep_view,
-    db: Session = Depends(get_db),
-):
-    items, total = list_organizations_paginated(
-        db, q=q, page=page, page_size=page_size, authorization=authorization
-    )
-    return OrganizationPaginatedResponse(items=items, total=total, page=page, page_size=page_size)
-
-
-@router.post("/import-preview", response_model=OrganizationImportPreviewResponse)
-def preview_organization_import(
-    payload: OrganizationImportPreviewRequest,
-    authorization: AuthorizationContext = _dep_create,
-    db: Session = Depends(get_db),
-):
-    if not can_create_organization(authorization):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
-
-    parsed = parse_organization_requisites(payload.text)
+def _build_import_preview(
+    parsed: OrganizationImportCandidate,
+    db: Session,
+) -> OrganizationImportPreviewResponse:
     identifiers = [
         OrganizationIdentifierUpsert(
             identifier_type=identifier_type,
@@ -133,6 +123,55 @@ def preview_organization_import(
     )
 
 
+@router.get("", response_model=OrganizationPaginatedResponse)
+def read_organizations(
+    q: str = "",
+    page: int = 1,
+    page_size: int = 20,
+    authorization: AuthorizationContext = _dep_view,
+    db: Session = Depends(get_db),
+):
+    items, total = list_organizations_paginated(
+        db, q=q, page=page, page_size=page_size, authorization=authorization
+    )
+    return OrganizationPaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.post("/import-preview", response_model=OrganizationImportPreviewResponse)
+def preview_organization_import(
+    payload: OrganizationImportPreviewRequest,
+    authorization: AuthorizationContext = _dep_create,
+    db: Session = Depends(get_db),
+):
+    if not can_create_organization(authorization):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    return _build_import_preview(parse_organization_requisites(payload.text), db)
+
+
+@router.post("/import-file-preview", response_model=OrganizationImportPreviewResponse)
+async def preview_organization_import_file(
+    file: Annotated[UploadFile, File()],
+    authorization: AuthorizationContext = _dep_create,
+    db: Session = Depends(get_db),
+):
+    if not can_create_organization(authorization):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    raw = await file.read(_MAX_IMPORT_BYTES + 1)
+    if len(raw) > _MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=413, detail="Файл реквизитов превышает лимит 5 МБ")
+    try:
+        text = extract_local_import_text(file.filename or "", file.content_type, raw)
+    except UnsupportedImportFormatError as exc:
+        raise HTTPException(status_code=415, detail=str(exc)) from exc
+    except InvalidImportFileError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except LocalOcrUnavailableError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="В файле не найден текст реквизитов")
+    return _build_import_preview(parse_organization_requisites(text), db)
+
+
 @router.post("", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(
     payload: OrganizationCreateWithIdentifiers,
@@ -170,6 +209,8 @@ def create_organization(
         )
     except OrganizationNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OrganizationLegalFormError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/{organization_id}", response_model=OrganizationResponse)
@@ -226,6 +267,8 @@ def update_organization(
         )
     except OrganizationNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OrganizationLegalFormError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.delete("/{organization_id}", status_code=status.HTTP_204_NO_CONTENT)

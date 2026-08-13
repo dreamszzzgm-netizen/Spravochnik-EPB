@@ -16,7 +16,9 @@ from app.modules.organizations.schemas import (
 )
 from app.modules.organizations.service import (
     OrganizationConflictError,
+    OrganizationLegalFormError,
     OrganizationNotFoundError,
+    validate_organization_legal_form,
 )
 
 
@@ -61,10 +63,10 @@ def test_organization_update_schema_optional_fields() -> None:
 
 def test_identifier_schema_requires_value() -> None:
     schema = OrganizationIdentifierCreate(
-        identifier_type=IdentifierType.INN, identifier_value="7701234567"
+        identifier_type=IdentifierType.INN, identifier_value="1111111111"
     )
     assert schema.identifier_type is IdentifierType.INN
-    assert schema.identifier_value == "7701234567"
+    assert schema.identifier_value == "1111111111"
 
 
 def test_manage_permission_requires_scope_unless_superuser() -> None:
@@ -111,3 +113,35 @@ def test_own_scope_matches_creator() -> None:
 def test_service_raises_conflict_on_identifier_conflict() -> None:
     assert issubclass(OrganizationConflictError, Exception)
     assert OrganizationConflictError is not OrganizationNotFoundError
+
+
+def test_ip_rejects_legal_only_fields() -> None:
+    try:
+        validate_organization_legal_form(
+            OrganizationType.INDIVIDUAL_ENTREPRENEUR,
+            legal_address="legal-only",
+            actual_address=None,
+            director_name=None,
+            residence_address="residence",
+            passport_details="test details",
+            identifiers=[],
+        )
+    except OrganizationLegalFormError:
+        return
+    raise AssertionError("IP payload accepted legal-entity-only fields")
+
+
+def test_legal_entity_rejects_ip_only_fields() -> None:
+    try:
+        validate_organization_legal_form(
+            OrganizationType.LEGAL_ENTITY,
+            legal_address="legal",
+            actual_address=None,
+            director_name="Director",
+            residence_address="ip-only",
+            passport_details=None,
+            identifiers=[],
+        )
+    except OrganizationLegalFormError:
+        return
+    raise AssertionError("Legal-entity payload accepted IP-only fields")
