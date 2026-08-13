@@ -1,7 +1,5 @@
 import uuid
 
-import pytest
-
 from app.modules.identity.models import ScopeType
 from app.modules.organizations.authorization import (
     can_manage_organization,
@@ -120,7 +118,7 @@ def test_service_raises_conflict_on_identifier_conflict() -> None:
 
 
 def test_ip_rejects_legal_only_fields() -> None:
-    with pytest.raises(OrganizationLegalFormError):
+    try:
         validate_organization_legal_form(
             OrganizationType.INDIVIDUAL_ENTREPRENEUR,
             legal_address="legal-only",
@@ -130,10 +128,13 @@ def test_ip_rejects_legal_only_fields() -> None:
             passport_details="test details",
             identifiers=[],
         )
+    except OrganizationLegalFormError:
+        return
+    raise AssertionError("IP payload accepted legal-entity-only fields")
 
 
 def test_legal_entity_rejects_ip_only_fields() -> None:
-    with pytest.raises(OrganizationLegalFormError):
+    try:
         validate_organization_legal_form(
             OrganizationType.LEGAL_ENTITY,
             legal_address="legal",
@@ -143,3 +144,6 @@ def test_legal_entity_rejects_ip_only_fields() -> None:
             passport_details=None,
             identifiers=[],
         )
+    except OrganizationLegalFormError:
+        return
+    raise AssertionError("Legal-entity payload accepted IP-only fields")
