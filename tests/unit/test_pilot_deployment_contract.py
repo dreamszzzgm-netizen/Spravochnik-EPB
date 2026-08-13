@@ -102,6 +102,16 @@ def test_shell_scripts_are_checked_out_with_unix_line_endings() -> None:
     assert "*.sh text eol=lf" in gitattributes
 
 
+def test_windows_pilot_scripts_are_ascii_for_windows_powershell_51() -> None:
+    for relative in (
+        "deploy/pilot/start-pilot.ps1",
+        "deploy/pilot/stop-pilot.ps1",
+        "deploy/pilot/create-desktop-shortcuts.ps1",
+    ):
+        raw = (ROOT / relative).read_bytes()
+        assert all(byte < 128 for byte in raw), relative
+
+
 def test_windows_smart_launcher_starts_docker_and_pilot_safely() -> None:
     launcher = _read("deploy/pilot/start-pilot.ps1")
 
@@ -135,7 +145,7 @@ def test_windows_shortcut_creator_hides_terminal_and_targets_launcher() -> None:
 
     assert "WScript.Shell" in shortcuts
     assert "Spravoshnik EPB.lnk" in shortcuts
-    assert "Остановить Spravoshnik EPB.lnk" in shortcuts
+    assert "Stop Spravoshnik EPB.lnk" in shortcuts
     assert "start-pilot.ps1" in shortcuts
     assert "stop-pilot.ps1" in shortcuts
     assert "-WindowStyle Hidden" in shortcuts
