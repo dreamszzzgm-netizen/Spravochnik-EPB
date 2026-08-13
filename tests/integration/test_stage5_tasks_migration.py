@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, inspect, text
 
 pytestmark = pytest.mark.integration
 
-CURRENT_HEAD = "0013_stage5_tasks_core"
+CURRENT_HEAD = "0014_stage5_workflow_engine"
 PARENT_HEAD = "0012_stage4_contract_lifecycle"
 EXPECTED_TABLES = {
     "tasks",
