@@ -94,7 +94,9 @@ class WorkflowService:
 
         orders = [step.sort_order for step in steps]
         if len(orders) != len(set(orders)):
-            raise WorkflowValidationError("Нарушен порядок задач workflow: значения должны быть уникальны")
+            raise WorkflowValidationError(
+                "Нарушен порядок задач workflow: значения должны быть уникальны"
+            )
         if any(step.sort_order < 0 for step in steps):
             raise WorkflowValidationError("Порядок задач workflow не может быть отрицательным")
         if any(step.relative_due_days < 0 for step in steps):
