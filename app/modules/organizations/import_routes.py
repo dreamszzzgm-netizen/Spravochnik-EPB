@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
@@ -17,7 +18,7 @@ _TEXT_SUFFIXES = {".txt"}
 
 @router.post("/import-candidate", response_model=OrganizationImportCandidate)
 async def import_candidate(
-    file: UploadFile = File(...),
+    file: Annotated[UploadFile, File()],
     _authorization=_dep_create,
 ) -> OrganizationImportCandidate:
     suffix = Path(file.filename or "").suffix.lower()
