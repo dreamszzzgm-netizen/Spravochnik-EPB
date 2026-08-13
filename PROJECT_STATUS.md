@@ -118,6 +118,13 @@ Feature branch: `agent/stage6-cp62-expertise-collaboration` (worktree `D:\Spravo
 
 Inspection, NDT, defects, photos, calculations, conclusion, RTN attempts, DOCX generation, AI, expertise documents, expert attestation subsystem, numbering format.
 
+### Handoff / transfer state
+
+- CP6.2 HEAD: `d0d0f7a` (`feat: add Expertise Collaboration and Workflow bridge` + `fix: map participant IntegrityError race to 409 conflict`).
+- PR **#18** «Stage 6 CP6.2 — Expertise Collaboration» → base `agent/integration-cp52-smart-import-hardening`, **Ready for review**, CI 4/4 PASS, auto-merge OFF. **Не мержить самостоятельно.**
+- Code review: P0=0, P1=0, P2=0, P3=2 (оба устранены).
+- `READY_FOR_EXPERTISE_CP63 = YES` (CP6.1 интегрирован, CP6.2 migration single head, employee selector / participants / task bridge / workflow bridge работают и покрыты security-тестами, backend 633 / frontend 88 зелёные, branch pushed, PR создан, worktree clean).
+
 
 
 ## Stage 5 boundary / deferred work
