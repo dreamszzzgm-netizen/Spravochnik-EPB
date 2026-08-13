@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,9 +17,19 @@ class OrganizationBase(BaseModel):
     parent_id: uuid.UUID | None = None
     legal_address: str | None = Field(default=None, max_length=500)
     actual_address: str | None = Field(default=None, max_length=500)
+    residence_address: str | None = Field(default=None, max_length=500)
     director_name: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=64)
     email: str | None = Field(default=None, max_length=320)
+    passport_series: str | None = Field(default=None, max_length=16)
+    passport_number: str | None = Field(default=None, max_length=32)
+    passport_issued_by: str | None = Field(default=None, max_length=500)
+    passport_issue_date: date | None = None
+    passport_department_code: str | None = Field(default=None, max_length=32)
+    bank_name: str | None = Field(default=None, max_length=255)
+    bank_bik: str | None = Field(default=None, max_length=20)
+    bank_account: str | None = Field(default=None, max_length=64)
+    correspondent_account: str | None = Field(default=None, max_length=64)
     comment: str | None = None
 
 
@@ -34,9 +44,19 @@ class OrganizationUpdate(BaseModel):
     parent_id: uuid.UUID | None = None
     legal_address: str | None = Field(default=None, max_length=500)
     actual_address: str | None = Field(default=None, max_length=500)
+    residence_address: str | None = Field(default=None, max_length=500)
     director_name: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=64)
     email: str | None = Field(default=None, max_length=320)
+    passport_series: str | None = Field(default=None, max_length=16)
+    passport_number: str | None = Field(default=None, max_length=32)
+    passport_issued_by: str | None = Field(default=None, max_length=500)
+    passport_issue_date: date | None = None
+    passport_department_code: str | None = Field(default=None, max_length=32)
+    bank_name: str | None = Field(default=None, max_length=255)
+    bank_bik: str | None = Field(default=None, max_length=20)
+    bank_account: str | None = Field(default=None, max_length=64)
+    correspondent_account: str | None = Field(default=None, max_length=64)
     comment: str | None = None
 
 
@@ -49,9 +69,19 @@ class OrganizationResponse(BaseModel):
     short_name: str | None
     legal_address: str | None
     actual_address: str | None
+    residence_address: str | None
     director_name: str | None
     phone: str | None
     email: str | None
+    passport_series: str | None
+    passport_number: str | None
+    passport_issued_by: str | None
+    passport_issue_date: date | None
+    passport_department_code: str | None
+    bank_name: str | None
+    bank_bik: str | None
+    bank_account: str | None
+    correspondent_account: str | None
     comment: str | None
     parent_id: uuid.UUID | None
     deleted_at: datetime | None
