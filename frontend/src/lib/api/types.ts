@@ -64,7 +64,9 @@ export interface OrganizationCreatePayload {
   organization_type: OrganizationType;
   legal_address: string | null;
   actual_address: string | null;
+  residence_address: string | null;
   director_name: string | null;
+  passport_details: string | null;
   phone: string | null;
   email: string | null;
   comment: string | null;
@@ -77,7 +79,9 @@ export interface OrganizationUpdatePayload {
   organization_type?: OrganizationType | null;
   legal_address?: string | null;
   actual_address?: string | null;
+  residence_address?: string | null;
   director_name?: string | null;
+  passport_details?: string | null;
   phone?: string | null;
   email?: string | null;
   comment?: string | null;
@@ -91,7 +95,9 @@ export interface OrganizationResponse {
   short_name: string | null;
   legal_address: string | null;
   actual_address: string | null;
+  residence_address: string | null;
   director_name: string | null;
+  passport_details: string | null;
   phone: string | null;
   email: string | null;
   comment: string | null;
@@ -106,6 +112,26 @@ export interface OrganizationPaginatedResponse {
   total: number;
   page: number;
   page_size: number;
+}
+
+export interface OrganizationImportCandidate {
+  organization_type: OrganizationType;
+  legal_name: string | null;
+  short_name: string | null;
+  legal_address: string | null;
+  actual_address: string | null;
+  residence_address: string | null;
+  director_name: string | null;
+  passport_details: string | null;
+  phone: string | null;
+  email: string | null;
+  identifiers: OrganizationIdentifierCreate[];
+}
+
+export interface OrganizationImportPreviewResponse {
+  candidate: OrganizationImportCandidate;
+  warnings: string[];
+  duplicate_warnings: string[];
 }
 
 export interface OPOResponse {
