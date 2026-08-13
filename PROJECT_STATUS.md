@@ -7,10 +7,10 @@
 - Active checkpoint: **Stage 5 / CP5.2 — Workflow Engine backend**.
 - Feature branch: `agent/stage5-cp52-workflow-engine`.
 - Draft PR: `#11`, stacked on `agent/stage5-cp51-tasks-core`.
-- Verified functional code head before final documentation/review commits: `e8f24bccf9c832041f8622303a85dd1b48494095`.
+- Functional code head: `dc23aae6779f193cd9f36bdd11ec507907d2597b`.
+- Documentation-complete verified head before this status-only synchronization: `7e4c49535f6fb6efb18670a1841f6f3c8b17299b`.
 - Alembic head: `0014_stage5_workflow_engine`.
-- Verification at that code head: GitHub Actions run `31693756568` (#420) — Ruff PASS, `alembic upgrade head` PASS, **562 passed / 289 warnings**.
-- Follow-up code head `dc23aae6779f193cd9f36bdd11ec507907d2597b` only replaces the workflow API's deprecated 422 status constant; a new PR CI run was triggered for exact-head verification.
+- Final verification: GitHub Actions run `31694161900` (#442) — Ruff PASS, `alembic upgrade head` PASS, pytest PASS. The immediately preceding full evidence run `31693756568` (#420) reported **562 passed / 289 warnings**; run #442 passed the same complete suite after the warning-cleanup and documentation commits.
 
 ## Completed through CP5.2
 
