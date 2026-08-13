@@ -3,10 +3,7 @@ import zipfile
 
 import pytest
 
-from app.modules.organizations.import_files import (
-    extract_local_import_text,
-    UnsupportedImportFormatError,
-)
+from app.modules.organizations import import_files
 
 
 def _zip_bytes(files: dict[str, str]) -> bytes:
@@ -20,7 +17,7 @@ def _zip_bytes(files: dict[str, str]) -> bytes:
 def test_extracts_utf8_text_file() -> None:
     raw = "ИНН: 123456789012\nОГРНИП: 321123456789012".encode()
 
-    text = extract_local_import_text("card.txt", "text/plain", raw)
+    text = import_files.extract_local_import_text("card.txt", "text/plain", raw)
 
     assert "ИНН: 123456789012" in text
     assert "ОГРНИП: 321123456789012" in text
@@ -49,7 +46,7 @@ def test_extracts_docx_paragraphs_and_table_cells() -> None:
         }
     )
 
-    text = extract_local_import_text(
+    text = import_files.extract_local_import_text(
         "card.docx",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         raw,
@@ -85,7 +82,7 @@ def test_extracts_xlsx_two_column_rows_as_requisite_pairs() -> None:
         }
     )
 
-    text = extract_local_import_text(
+    text = import_files.extract_local_import_text(
         "card.xlsx",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         raw,
@@ -96,8 +93,8 @@ def test_extracts_xlsx_two_column_rows_as_requisite_pairs() -> None:
 
 
 def test_rejects_pdf_or_image_until_local_handler_is_available() -> None:
-    with pytest.raises(UnsupportedImportFormatError):
-        extract_local_import_text("card.pdf", "application/pdf", b"%PDF")
+    with pytest.raises(import_files.UnsupportedImportFormatError):
+        import_files.extract_local_import_text("card.pdf", "application/pdf", b"%PDF")
 
-    with pytest.raises(UnsupportedImportFormatError):
-        extract_local_import_text("passport.jpg", "image/jpeg", b"jpeg")
+    with pytest.raises(import_files.UnsupportedImportFormatError):
+        import_files.extract_local_import_text("passport.jpg", "image/jpeg", b"jpeg")
