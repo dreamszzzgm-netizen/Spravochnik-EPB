@@ -37,9 +37,8 @@ def list_contacts(
     *,
     include_deleted: bool = False,
 ) -> list[OrganizationContact]:
-    stmt = (
-        select(OrganizationContact)
-        .where(OrganizationContact.organization_id == organization_id)
+    stmt = select(OrganizationContact).where(
+        OrganizationContact.organization_id == organization_id
     )
     if not include_deleted:
         stmt = stmt.where(OrganizationContact.deleted_at.is_(None))
@@ -67,6 +66,17 @@ def get_identifier(db: Session, identifier_id: uuid.UUID) -> OrganizationIdentif
     return db.get(OrganizationIdentifier, identifier_id)
 
 
+def find_identifier_by_type_and_value(
+    db: Session, *, identifier_type, identifier_value: str
+) -> OrganizationIdentifier | None:
+    return db.scalar(
+        select(OrganizationIdentifier).where(
+            OrganizationIdentifier.identifier_type == identifier_type,
+            OrganizationIdentifier.identifier_value == identifier_value,
+        )
+    )
+
+
 def list_organizations_paginated(
     db: Session,
     *,
@@ -77,12 +87,8 @@ def list_organizations_paginated(
 ) -> tuple[list[Organization], int]:
     stmt = select(Organization).where(Organization.deleted_at.is_(None))
 
-    if (
-        authorization is not None
-        and not authorization.has_all_scope
-    ):
+    if authorization is not None and not authorization.has_all_scope:
         allowed_ids = authorization.related_organization_ids
-
         stmt = (
             stmt.where(Organization.id.in_(allowed_ids))
             if allowed_ids
@@ -98,22 +104,11 @@ def list_organizations_paginated(
             )
         )
 
-    total = db.scalar(
-        select(func.count()).select_from(
-            stmt.subquery()
-        )
-    )
-
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     offset = max(0, page - 1) * page_size
-
     items = list(
         db.scalars(
-            stmt.order_by(
-                Organization.legal_name.asc()
-            )
-            .offset(offset)
-            .limit(page_size)
+            stmt.order_by(Organization.legal_name.asc()).offset(offset).limit(page_size)
         )
     )
-
     return items, total or 0

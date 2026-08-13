@@ -8,6 +8,7 @@ from sqlalchemy import create_engine, inspect, text
 
 pytestmark = pytest.mark.integration
 
+LATEST_HEAD = "0014_org_legal_form_fields"
 CURRENT_HEAD = "0013_stage5_tasks_core"
 PARENT_HEAD = "0012_stage4_contract_lifecycle"
 EXPECTED_TABLES = {
@@ -117,7 +118,7 @@ def test_stage5_postgres_enums_are_exact() -> None:
 
 def test_stage5_migration_round_trip() -> None:
     database_url = _database_url()
-    assert _current_revision(database_url) == CURRENT_HEAD
+    assert _current_revision(database_url) == LATEST_HEAD
 
     try:
         _run_alembic("downgrade", PARENT_HEAD)

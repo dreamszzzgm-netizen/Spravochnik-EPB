@@ -79,7 +79,9 @@ class OrganizationService:
         parent_id: uuid.UUID | None,
         legal_address: str | None = None,
         actual_address: str | None = None,
+        residence_address: str | None = None,
         director_name: str | None = None,
+        passport_details: str | None = None,
         phone: str | None = None,
         email: str | None = None,
         comment: str | None = None,
@@ -96,7 +98,9 @@ class OrganizationService:
             parent_id=parent_id,
             legal_address=legal_address,
             actual_address=actual_address,
+            residence_address=residence_address,
             director_name=director_name,
+            passport_details=passport_details,
             phone=phone,
             email=email,
             comment=comment,
@@ -132,7 +136,9 @@ class OrganizationService:
         parent_id: uuid.UUID | None,
         legal_address: str | None = None,
         actual_address: str | None = None,
+        residence_address: str | None = None,
         director_name: str | None = None,
+        passport_details: str | None = None,
         phone: str | None = None,
         email: str | None = None,
         comment: str | None = None,
@@ -161,9 +167,15 @@ class OrganizationService:
         if actual_address is not None and actual_address != organization.actual_address:
             organization.actual_address = actual_address
             changed.append("actual_address")
+        if residence_address is not None and residence_address != organization.residence_address:
+            organization.residence_address = residence_address
+            changed.append("residence_address")
         if director_name is not None and director_name != organization.director_name:
             organization.director_name = director_name
             changed.append("director_name")
+        if passport_details is not None and passport_details != organization.passport_details:
+            organization.passport_details = passport_details
+            changed.append("passport_details")
         if phone is not None and phone != organization.phone:
             organization.phone = phone
             changed.append("phone")
