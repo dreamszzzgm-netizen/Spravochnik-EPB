@@ -1,14 +1,17 @@
-"""Application service for workflow template configuration."""
+"""Application service for workflow template configuration and instantiation."""
 
 import uuid
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.identity.audit import write_audit
 from app.modules.tasks.enums import TaskPriority
+from app.modules.tasks.models import Task
+from app.modules.tasks.service import TaskLinkInput, TaskService
 from app.modules.workflows import repository
 from app.modules.workflows.models import (
     WorkflowTaskTemplate,
@@ -208,3 +211,85 @@ class WorkflowService:
         if version is None:
             raise WorkflowValidationError("У workflow нет опубликованной версии")
         return version
+
+    def instantiate(
+        self,
+        db: Session,
+        *,
+        actor_user_id: uuid.UUID,
+        creator_employee_id: uuid.UUID,
+        template_id: uuid.UUID,
+        anchor_date: date,
+        links: Iterable[TaskLinkInput],
+        due_date_resolver: Callable[[date, int], date],
+    ) -> list[Task]:
+        workflow = repository.get_template(db, template_id)
+        if workflow is None:
+            raise WorkflowNotFoundError("Workflow-шаблон не найден")
+        if not workflow.is_active:
+            raise WorkflowValidationError("Workflow-шаблон неактивен")
+
+        version = repository.latest_published_version(db, template_id)
+        if version is None:
+            raise WorkflowValidationError("У workflow нет опубликованной версии")
+        steps = repository.list_task_templates(db, version.id)
+        if not steps:
+            raise WorkflowValidationError("Опубликованная версия workflow не содержит задач")
+
+        assignees_by_role: dict[uuid.UUID, list[uuid.UUID]] = {}
+        for role_id in {step.assignee_function_role_id for step in steps}:
+            employee_ids = repository.eligible_employee_ids_for_function_role(
+                db,
+                function_role_id=role_id,
+                anchor_date=anchor_date,
+            )
+            if not employee_ids:
+                raise WorkflowValidationError(
+                    "Не найден доступный сотрудник для функциональной роли workflow"
+                )
+            assignees_by_role[role_id] = employee_ids
+
+        normalized_links = tuple(links)
+        created_tasks: list[Task] = []
+        task_service = TaskService()
+        try:
+            for step in steps:
+                task = task_service.create_task(
+                    db,
+                    actor_user_id=actor_user_id,
+                    creator_employee_id=creator_employee_id,
+                    title=step.title,
+                    description=step.description,
+                    due_date=due_date_resolver(anchor_date, step.relative_due_days),
+                    priority=step.priority,
+                    is_personal=False,
+                    assignee_ids=assignees_by_role[step.assignee_function_role_id],
+                    links=normalized_links,
+                    commit=False,
+                )
+                task.source_workflow_template_version_id = version.id
+                task.source_workflow_task_template_id = step.id
+                db.flush()
+                created_tasks.append(task)
+
+            write_audit(
+                db,
+                user_id=actor_user_id,
+                action="workflow.instantiated",
+                entity_type="workflow_template",
+                entity_id=workflow.id,
+                summary=f"Созданы задачи workflow {workflow.name}",
+                result="success",
+                metadata={
+                    "workflow_template_version_id": str(version.id),
+                    "version_number": version.version_number,
+                    "task_count": len(created_tasks),
+                },
+            )
+            db.commit()
+            for task in created_tasks:
+                db.refresh(task)
+        except Exception:
+            db.rollback()
+            raise
+        return created_tasks
