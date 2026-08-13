@@ -70,7 +70,7 @@ export function OrganizationDocuments({ organizationId }: { organizationId: stri
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
+    queueMicrotask(() => { void load(controller.signal); });
     return () => controller.abort();
   }, [load]);
 
