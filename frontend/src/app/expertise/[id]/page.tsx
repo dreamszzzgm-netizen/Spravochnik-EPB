@@ -1,5 +1,7 @@
-import { ExpertiseHeader } from "@/components/dashboard/expertise-header";
-import { ExpertiseTabs } from "@/components/dashboard/expertise-tabs";
+import { ShieldCheck } from "lucide-react";
+
+import { PilotEmptyModule } from "@/components/pilot-empty-module";
+import { PILOT_UNAVAILABLE } from "@/components/pilot-unavailable-copy";
 
 export default async function ExpertiseDetailPage({
   params,
@@ -7,10 +9,14 @@ export default async function ExpertiseDetailPage({
   params: Promise<{ id: string }>;
 }) {
   await params;
+
   return (
-    <div className="space-y-6">
-      <ExpertiseHeader />
-      <ExpertiseTabs />
-    </div>
+    <PilotEmptyModule
+      icon={ShieldCheck}
+      title="Карточка экспертизы недоступна"
+      description={PILOT_UNAVAILABLE.expertise}
+      actionLabel="К списку экспертиз"
+      actionHref="/expertise"
+    />
   );
 }

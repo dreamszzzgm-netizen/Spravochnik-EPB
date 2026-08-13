@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils";
-
-import type { ContractStatus, ExpertiseStatus, TaskStatus } from "@/lib/mock-data";
+import type { ContractStatus, ExpertiseStatus, TaskStatus } from "@/lib/ui-business-types";
 
 type StatusKind = "contract" | "expertise" | "task";
 

@@ -2,17 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import {
-  Building2,
-  FileText,
-  ShieldCheck,
-  ListTodo,
-  Search,
-  Calendar,
-  BookOpen,
-  ArrowRight,
-} from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 
+import { mainNav, settingsNav } from "@/components/nav-config";
 import {
   CommandDialog,
   CommandEmpty,
@@ -20,42 +12,23 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandShortcut,
 } from "@/components/ui/command";
-import { searchIndex, type SearchEntry } from "@/lib/mock-data";
 
-const iconByKind: Record<SearchEntry["kind"], React.ComponentType<{ className?: string }>> = {
-  organization: Building2,
-  contract: FileText,
-  expertise: ShieldCheck,
-  task: ListTodo,
-  event: Calendar,
-  npd: BookOpen,
-};
+const navigationItems = [...mainNav, ...settingsNav];
 
 export function CommandSearch() {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
 
   React.useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen((open) => !open);
+    const down = (event: KeyboardEvent) => {
+      if (event.key === "k" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        setOpen((value) => !value);
       }
     };
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, []);
-
-  const grouped = React.useMemo(() => {
-    const groups: Record<string, SearchEntry[]> = {};
-    for (const item of searchIndex) {
-      const key = item.group;
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(item);
-    }
-    return groups;
   }, []);
 
   return (
@@ -66,46 +39,43 @@ export function CommandSearch() {
         className="inline-flex h-9 w-full max-w-md items-center gap-2 rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted"
       >
         <Search className="h-4 w-4" />
-        <span className="flex-1 text-left">Поиск по системе…</span>
+        <span className="flex-1 text-left">Перейти к разделу…</span>
         <kbd className="pointer-events-none hidden h-5 select-none items-center gap-0.5 rounded border border-border bg-background px-1.5 font-mono text-[10px] font-medium sm:inline-flex">
           <span className="text-xs">⌘</span>K
         </kbd>
       </button>
 
       <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder="Введите название организации, договора, экспертизы…" />
+        <CommandInput placeholder="Введите название раздела…" />
         <CommandList>
-          <CommandEmpty>Ничего не найдено</CommandEmpty>
-          {Object.entries(grouped).map(([group, items]) => (
-            <CommandGroup key={group} heading={group}>
-              {items.map((item) => {
-                const Icon = iconByKind[item.kind];
-                return (
-                  <CommandItem
-                    key={item.id}
-                    value={`${item.title} ${item.subtitle ?? ""}`}
-                    onSelect={() => {
-                      router.push(item.href);
-                      setOpen(false);
-                    }}
-                    className="flex items-center gap-3"
-                  >
-                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <div className="flex flex-1 flex-col overflow-hidden">
-                      <span className="truncate text-sm">{item.title}</span>
-                      {item.subtitle && (
-                        <span className="truncate text-xs text-muted-foreground">
-                          {item.subtitle}
-                        </span>
-                      )}
-                    </div>
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    {item.shortcut && <CommandShortcut>{item.shortcut}</CommandShortcut>}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          ))}
+          <CommandEmpty>Раздел не найден</CommandEmpty>
+          <CommandGroup heading="Разделы системы">
+            {navigationItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <CommandItem
+                  key={item.href}
+                  value={`${item.label} ${item.description ?? ""}`}
+                  onSelect={() => {
+                    router.push(item.href);
+                    setOpen(false);
+                  }}
+                  className="flex items-center gap-3"
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm">{item.label}</span>
+                    {item.description && (
+                      <span className="truncate text-xs text-muted-foreground">
+                        {item.description}
+                      </span>
+                    )}
+                  </div>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                </CommandItem>
+              );
+            })}
+          </CommandGroup>
         </CommandList>
       </CommandDialog>
     </>

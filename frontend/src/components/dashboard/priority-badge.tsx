@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils";
-
-import type { TaskPriority } from "@/lib/mock-data";
+import type { TaskPriority } from "@/lib/ui-business-types";
 
 const map: Record<TaskPriority, { className: string; label: string }> = {
   низкий: { className: "bg-priority-low text-priority-low", label: "Низкий" },

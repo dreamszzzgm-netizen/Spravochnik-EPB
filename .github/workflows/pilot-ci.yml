@@ -1,0 +1,158 @@
+name: pilot-ci
+
+on:
+  push:
+    paths:
+      - "Dockerfile.backend"
+      - ".dockerignore"
+      - "docker-compose.pilot.yml"
+      - "deploy/pilot/**"
+      - "frontend/**"
+      - "docs/PILOT_DEPLOYMENT.md"
+      - "PROJECT_STATUS.md"
+      - "tests/unit/test_pilot_deployment_contract.py"
+      - ".github/workflows/pilot-ci.yml"
+  pull_request:
+    paths:
+      - "Dockerfile.backend"
+      - ".dockerignore"
+      - "docker-compose.pilot.yml"
+      - "deploy/pilot/**"
+      - "frontend/**"
+      - "docs/PILOT_DEPLOYMENT.md"
+      - "PROJECT_STATUS.md"
+      - "tests/unit/test_pilot_deployment_contract.py"
+      - ".github/workflows/pilot-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-quality:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+        env:
+          BACKEND_ORIGIN: http://backend:8000
+
+  pilot-images-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare CI pilot environment
+        run: |
+          mkdir -p var/pilot/storage var/pilot/backups
+          cat > /tmp/pilot.env <<'EOF'
+          PILOT_HTTP_PORT=33000
+          APP_VERSION=ci
+          LOG_LEVEL=INFO
+          POSTGRES_USER=spravoshnik
+          POSTGRES_DB=spravoshnik
+          POSTGRES_PASSWORD=ci-only-password
+          DATABASE_URL=postgresql+psycopg://spravoshnik:ci-only-password@postgres:5432/spravoshnik
+          SESSION_COOKIE_SECURE=false
+          LOGIN_MAX_FAILED_ATTEMPTS=5
+          LOGIN_LOCKOUT_SECONDS=900
+          SESSION_IDLE_TIMEOUT_SECONDS=1800
+          SESSION_ABSOLUTE_TIMEOUT_SECONDS=43200
+          WORKER_POLL_INTERVAL_SECONDS=2
+          SCHEDULER_INTERVAL_SECONDS=60
+          EOF
+
+      - name: Validate Compose configuration
+        run: |
+          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml --profile maintenance config --format json > /tmp/pilot-rendered.json
+          python - <<'PY'
+          import json
+
+          with open('/tmp/pilot-rendered.json', encoding='utf-8') as stream:
+              config = json.load(stream)
+
+          services = config['services']
+          frontend_ports = services['frontend'].get('ports', [])
+          assert any(
+              str(port.get('published')) == '33000' and int(port['target']) == 3000
+              for port in frontend_ports
+          ), frontend_ports
+
+          for service_name in ('postgres', 'migrate', 'backend', 'worker', 'scheduler', 'backup'):
+              assert not services[service_name].get('ports'), (
+                  service_name,
+                  services[service_name].get('ports'),
+              )
+          PY
+
+      - name: Build pilot images
+        run: |
+          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml build backend frontend
+          docker run --rm --entrypoint sh spravoshnik-epb-backend:pilot -c \
+            'command -v spravoshnik-api && command -v spravoshnik-worker && command -v spravoshnik-scheduler && command -v spravoshnik-bootstrap-superuser && command -v alembic'
+
+      - name: Start pilot stack
+        run: |
+          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml up -d
+
+      - name: Verify migration gate and service health
+        run: |
+          set -eu
+          MIGRATE_ID="$(docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml ps -aq migrate)"
+          test -n "$MIGRATE_ID"
+          test "$(docker inspect -f '{{.State.ExitCode}}' "$MIGRATE_ID")" = "0"
+
+          BACKEND_ID="$(docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml ps -q backend)"
+          test -n "$BACKEND_ID"
+          for _ in $(seq 1 36); do
+            HEALTH="$(docker inspect -f '{{.State.Health.Status}}' "$BACKEND_ID")"
+            if [ "$HEALTH" = "healthy" ]; then
+              break
+            fi
+            sleep 5
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' "$BACKEND_ID")" = "healthy"
+
+          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml exec -T backend \
+            python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5).read().decode())"
+
+          for service in postgres backend worker scheduler frontend; do
+            docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml ps --status running --services | grep -qx "$service"
+          done
+
+      - name: Verify frontend same-origin backend proxy
+        run: |
+          curl --fail --retry 12 --retry-delay 5 --retry-connrefused \
+            http://127.0.0.1:33000/backend/health/live
+
+      - name: Verify manual backup profile
+        run: |
+          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml --profile maintenance run --rm backup
+          BACKUP_DIR="$(find var/pilot/backups -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$BACKUP_DIR"
+          test -s "$BACKUP_DIR/database.dump"
+          test -s "$BACKUP_DIR/storage.tar.gz"
+          test -s "$BACKUP_DIR/manifest.txt"
+          grep -q 'schema_head=0013_stage5_tasks_core' "$BACKUP_DIR/manifest.txt"
+
+      - name: Show pilot status on failure
+        if: failure()
+        run: |
+          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml ps -a || true
+          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml logs --no-color --tail 200 || true
+
+      - name: Clean up pilot stack
+        if: always()
+        run: |
+          docker compose --env-file /tmp/pilot.env -f docker-compose.pilot.yml --profile maintenance down -v --remove-orphans || true
