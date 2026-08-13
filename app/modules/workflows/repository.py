@@ -1,11 +1,17 @@
 """Persistence helpers for versioned workflow configuration."""
 
 import uuid
+from datetime import date
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
-from app.modules.identity.models import EmployeeFunctionRole
+from app.modules.identity.models import (
+    Employee,
+    EmployeeAbsence,
+    EmployeeFunctionRole,
+    EmployeeFunctionRoleAssignment,
+)
 from app.modules.workflows.models import (
     WorkflowTaskTemplate,
     WorkflowTemplate,
@@ -138,3 +144,32 @@ def active_function_role_ids(
             )
         ).all()
     )
+
+
+def eligible_employee_ids_for_function_role(
+    db: Session,
+    *,
+    function_role_id: uuid.UUID,
+    anchor_date: date,
+) -> list[uuid.UUID]:
+    absence_exists = sa.exists(
+        sa.select(EmployeeAbsence.employee_id).where(
+            EmployeeAbsence.employee_id == Employee.id,
+            EmployeeAbsence.date_from <= anchor_date,
+            EmployeeAbsence.date_to >= anchor_date,
+        )
+    )
+    stmt = (
+        sa.select(Employee.id)
+        .join(
+            EmployeeFunctionRoleAssignment,
+            EmployeeFunctionRoleAssignment.employee_id == Employee.id,
+        )
+        .where(
+            EmployeeFunctionRoleAssignment.function_role_id == function_role_id,
+            Employee.deleted_at.is_(None),
+            ~absence_exists,
+        )
+        .order_by(Employee.full_name.asc(), Employee.id.asc())
+    )
+    return list(db.scalars(stmt).all())
