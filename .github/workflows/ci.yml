@@ -50,4 +50,5 @@ jobs:
           tests/integration/test_organization_ip_profile.py
           tests/integration/test_organization_ip_profile_api.py
           tests/integration/test_organization_import_candidate_api.py
-      - run: pytest
+      - name: Run full regression suite
+        run: timeout 180s pytest -vv
