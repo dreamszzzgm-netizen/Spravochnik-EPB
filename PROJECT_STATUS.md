@@ -76,6 +76,22 @@ Source branch `agent/integration-reports-documents` (PR #16) merged into the can
 - Contains: CP5.2 Workflow Engine, Organization Smart Import (+ hardening), Reports, Organization Documents, Document Completeness.
 - Current Alembic head: `0016_documents`.
 
+## Stage 6 CP6.1 — Expertise Core (in progress)
+
+Feature branch: `agent/stage6-cp61-expertise-core` (worktree `D:\Spravoshnik-EPB-Expertise`), based on the canonical integration branch.
+
+- Domain invariant **1 expertise = 1 expertise subject** enforced at DB level (`expertise_subjects.expertise_id UNIQUE` + CHECK `technical_device_id` XOR `building_id`) and at the service layer.
+- `expertises` / `expertise_subjects` / `expertise_contract_items` / `expertise_status_history` tables; FK RESTRICT for historically meaningful references (contract, expertise type, employee, TD, building); soft-delete only, no cascade destroying history.
+- Status machine `preparation -> … -> completed` with `rtn_review -> {registered, rtn_rework}` and `rtn_rework -> ready_for_registration`; unconfirmed transitions fail closed.
+- Append-only `expertise_status_history` with `from_status`/`to_status`/`changed_by`/`reason`.
+- Optimistic locking via `version` + expected-version check → `409 Conflict` on mismatch.
+- Scoped authorization via existing `expertises.view/create/edit/change_status` permission codes; list filtering applied before count/offset/limit; foreign expertise/contract/item/TD/building fail closed with 404.
+- Alembic: **single head** `0017_expertises`; linear chain `… -> 0016_documents -> 0017_expertises`.
+- Backend regression (disposable PostgreSQL): **617 passed / 0 skipped / 0 failed**; Ruff PASS.
+- Frontend: `/expertise` (real paginated list), `/expertise/[id]` (real card + status history), `/expertise/new` (create); mock-data no longer backs the Expertise routes. lint PASS, typecheck PASS, tests **88 passed**, production build PASS.
+
+
+
 ## Stage 5 boundary / deferred work
 
 ### CP5.3 — Contract ↔ Tasks integration

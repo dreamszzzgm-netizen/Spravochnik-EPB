@@ -92,6 +92,8 @@ def db_session() -> Generator[Session, None, None]:
                 task_technical_devices, task_buildings, task_opos,
                 comments, tasks,
                 audit_events,
+                expertise_status_history, expertise_contract_items,
+                expertise_subjects, expertises,
                 contract_item_technical_devices, contract_item_buildings,
                 contract_items, contract_responsibles, contracts,
                 custom_field_values, custom_field_definitions,
