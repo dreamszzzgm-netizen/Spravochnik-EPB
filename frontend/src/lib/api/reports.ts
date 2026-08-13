@@ -42,6 +42,7 @@ export interface ManagementReportResponse {
     expiring_40: number;
     missing: number;
     no_expiry: number;
+    valid: number;
     issues: DocumentIssueResponse[];
   };
   expertises: {

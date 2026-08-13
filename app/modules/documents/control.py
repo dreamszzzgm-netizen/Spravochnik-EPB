@@ -24,6 +24,7 @@ class RequirementSnapshot:
     required: bool
     expiry_required: bool
     applicability: str = "all"
+    active: bool = True
 
 
 def classify_document(
@@ -47,15 +48,23 @@ def classify_document(
 def applicable_requirements(
     requirements: list[RequirementSnapshot], *, has_opo: bool
 ) -> list[RequirementSnapshot]:
-    return [
-        requirement
-        for requirement in requirements
-        if requirement.required
-        and (
-            requirement.applicability == "all"
-            or (requirement.applicability == "has_opo" and has_opo)
+    applicable: dict[str, RequirementSnapshot] = {}
+    for requirement in requirements:
+        if not requirement.required or not requirement.active:
+            continue
+        if requirement.applicability != "all" and not (
+            requirement.applicability == "has_opo" and has_opo
+        ):
+            continue
+        existing = applicable.get(requirement.document_type)
+        applicable[requirement.document_type] = RequirementSnapshot(
+            document_type=requirement.document_type,
+            required=True,
+            expiry_required=requirement.expiry_required
+            or bool(existing and existing.expiry_required),
+            applicability=requirement.applicability,
         )
-    ]
+    return list(applicable.values())
 
 
 def missing_requirements(

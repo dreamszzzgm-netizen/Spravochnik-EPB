@@ -8,6 +8,7 @@ describe("management document control", () => {
   const report = read("src/app/reports/page.tsx");
   const workspace = read("src/app/organizations/[id]/documents/page.tsx");
   const docs = read("src/app/organizations/[id]/_components/organization-documents.tsx");
+  const organization = read("src/app/organizations/[id]/page.tsx");
 
   it("shows required control categories", () => {
     for (const label of [
@@ -24,6 +25,15 @@ describe("management document control", () => {
     expect(docs).toContain("uploadOrganizationDocument");
     expect(docs).toContain("organizationDocumentDownloadHref");
     expect(docs).toContain("deleteOrganizationDocument");
+    expect(docs).not.toContain("function expiryLabel");
+    expect(docs).toContain("document.status");
+    expect(organization).toContain("/documents");
+    expect(organization).toContain("Документы");
+  });
+
+  it("shows valid count and links issues directly to documents", () => {
+    expect(report).toContain("documents.valid");
+    expect(report).toContain("/documents");
   });
 
   it("is explicit before document schema migration", () => {

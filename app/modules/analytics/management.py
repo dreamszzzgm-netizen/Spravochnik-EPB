@@ -33,6 +33,7 @@ class DocumentControlSummary:
     expiring_40: int = 0
     missing: int = 0
     no_expiry: int = 0
+    valid: int = 0
     issues: tuple[DocumentIssue, ...] = ()
 
 

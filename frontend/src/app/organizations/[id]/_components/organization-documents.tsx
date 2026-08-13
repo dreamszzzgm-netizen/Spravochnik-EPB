@@ -29,17 +29,13 @@ function formatDate(value: string | null) {
   return new Intl.DateTimeFormat("ru-RU").format(new Date(`${value}T00:00:00`));
 }
 
-function expiryLabel(value: string | null) {
-  if (!value) return { label: "Без срока", variant: "outline" as const };
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const expiry = new Date(`${value}T00:00:00`);
-  const days = Math.round((expiry.getTime() - today.getTime()) / 86_400_000);
-  if (days < 0) return { label: "Истёк", variant: "destructive" as const };
-  if (days <= 14) return { label: `${days} дн.`, variant: "secondary" as const };
-  if (days <= 40) return { label: `${days} дн.`, variant: "outline" as const };
-  return { label: "Действует", variant: "outline" as const };
-}
+const STATUS_LABELS = {
+  expired: "Истёк",
+  expiring_14: "Истекает ≤ 14 дней",
+  expiring_40: "Истекает 15–40 дней",
+  valid: "Действует",
+  no_expiry: "Срок не указан",
+} as const;
 
 export function OrganizationDocuments({ organizationId }: { organizationId: string }) {
   const canEdit = useCan("organizations.update");
@@ -176,13 +172,15 @@ export function OrganizationDocuments({ organizationId }: { organizationId: stri
           ) : (
             <div className="space-y-3">
               {documents.map((document) => {
-                const status = expiryLabel(document.expires_at);
+                const status = document.status;
                 return (
                   <div key={document.id} className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium">{document.title}</p>
-                        <Badge variant={status.variant}>{status.label}</Badge>
+                        <Badge variant={status === "expired" ? "destructive" : "outline"}>
+                          {STATUS_LABELS[status]}
+                        </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {document.document_type} · {formatBytes(document.size_bytes)} · до {formatDate(document.expires_at)}

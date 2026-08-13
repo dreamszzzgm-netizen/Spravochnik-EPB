@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 
 import pytest
 from sqlalchemy import create_engine, inspect, text
 
 pytestmark = pytest.mark.integration
 
-LATEST_HEAD = "0015_org_legal_form_fields"
+LATEST_HEAD = "0016_documents"
 CURRENT_HEAD = "0013_stage5_tasks_core"
 PARENT_HEAD = "0012_stage4_contract_lifecycle"
 EXPECTED_TABLES = {
@@ -39,7 +40,11 @@ def _current_revision(database_url: str) -> str | None:
 
 
 def _run_alembic(*args: str) -> None:
-    subprocess.run(["alembic", *args], check=True, env=os.environ.copy())
+    subprocess.run(
+        [sys.executable, "-m", "alembic", *args],
+        check=True,
+        env=os.environ.copy(),
+    )
 
 
 def test_task_enums_are_exact() -> None:

@@ -51,3 +51,15 @@ def list_active_requirements(db: Session) -> list[DocumentRequirement]:
             .order_by(DocumentRequirement.title.asc())
         ).all()
     )
+
+
+def list_requirements(db: Session) -> list[DocumentRequirement]:
+    return list(
+        db.scalars(select(DocumentRequirement).order_by(DocumentRequirement.title.asc())).all()
+    )
+
+
+def get_requirement(
+    db: Session, requirement_id: uuid.UUID
+) -> DocumentRequirement | None:
+    return db.get(DocumentRequirement, requirement_id)

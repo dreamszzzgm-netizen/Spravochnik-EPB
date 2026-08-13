@@ -54,7 +54,20 @@ Integration branch: `agent/integration-cp52-smart-import-hardening` (local merge
 - Backend regression on disposable test PostgreSQL (port `5433`): **579 passed / 0 skipped / 0 failed**; `ruff check app tests` PASS.
 - Frontend: lint PASS, typecheck PASS, tests **80 passed**, production build PASS.
 - OCR runtime: local Tesseract **not installed** (`OCR_RUNTIME_AVAILABLE = NO`); OCR code is green via mocks/stubs, `TESSERACT_CMD`/`TESSERACT_LANG` documented in `.env.example`.
-- Reports/Documents (`agent/reports-document-control-ready`): **NOT YET INTEGRATED** — deferred to the next stage (Issue #15).
+- Reports/Documents source (`agent/reports-document-control-ready`): integrated into the new branch described below.
+
+## Reports and Organization Documents integration
+
+Integration branch: `agent/integration-reports-documents`, based on the verified CP5.2 + Smart Import hardening branch and preserving the source history from `agent/reports-document-control-ready`.
+
+- Reports: **complete in the integration branch**; `/api/reports/management` uses live organization, contract, task and document data and remains superuser-only.
+- Organization Documents: **complete in the integration branch**; organization-scoped list/upload/download/soft-delete uses `LocalFileStorage` and `STORAGE_ROOT`.
+- Document Completeness: **complete in the integration branch**; administrator-managed requirements support `all` and `has_opo`, and missing documents are derived only from active required applicable rules.
+- Documents workspace: `/organizations/[id]/documents`, linked directly from the organization card; no global Documents navigation item was added.
+- Alembic: **single head** `0016_documents`; linear chain `0013_stage5_tasks_core -> 0014_stage5_workflow_engine -> 0015_org_legal_form_fields -> 0016_documents`.
+- Migration round-trip on disposable PostgreSQL port `5433`: `0016_documents -> 0015_org_legal_form_fields -> 0016_documents` PASS; `document_requirements` and `organization_documents` verified.
+- Backend regression on disposable PostgreSQL: **594 passed / 0 skipped / 0 failed**; Ruff PASS.
+- Frontend: lint PASS, typecheck PASS, tests **84 passed**, production build PASS.
 
 ## Stage 5 boundary / deferred work
 

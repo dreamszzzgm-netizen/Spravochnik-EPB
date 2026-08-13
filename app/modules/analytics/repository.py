@@ -47,7 +47,12 @@ def load_document_control(db: Session, *, today: date) -> DocumentControlSummary
     ).all()
     document_rows = list(
         db.scalars(
-            select(OrganizationDocument).where(OrganizationDocument.deleted_at.is_(None))
+            select(OrganizationDocument)
+            .join(Organization, Organization.id == OrganizationDocument.organization_id)
+            .where(
+                OrganizationDocument.deleted_at.is_(None),
+                Organization.deleted_at.is_(None),
+            )
         ).all()
     )
     requirement_rows = list(
@@ -181,6 +186,7 @@ def load_document_control(db: Session, *, today: date) -> DocumentControlSummary
         expiring_40=counts[DocumentStatus.EXPIRING_40],
         missing=counts[DocumentStatus.MISSING],
         no_expiry=counts[DocumentStatus.NO_EXPIRY],
+        valid=counts[DocumentStatus.VALID],
         issues=tuple(issues),
     )
 

@@ -4,6 +4,7 @@ from app.modules.documents.control import (
     DocumentSnapshot,
     DocumentStatus,
     RequirementSnapshot,
+    applicable_requirements,
     classify_document,
     missing_requirements,
 )
@@ -44,3 +45,27 @@ def test_missing_comes_only_from_applicable_requirements() -> None:
     assert [item.document_type for item in missing_requirements(
         requirements, documents, has_opo=True
     )] == ["opo_certificate"]
+
+
+def test_inactive_requirement_is_never_applicable() -> None:
+    requirements = [
+        RequirementSnapshot(
+            "insurance",
+            required=True,
+            expiry_required=True,
+            applicability="all",
+            active=False,
+        )
+    ]
+    assert applicable_requirements(requirements, has_opo=True) == []
+
+
+def test_overlapping_requirements_are_combined_per_document_type() -> None:
+    requirements = [
+        RequirementSnapshot("insurance", True, False, "all"),
+        RequirementSnapshot("insurance", True, True, "has_opo"),
+    ]
+    applicable = applicable_requirements(requirements, has_opo=True)
+    assert len(applicable) == 1
+    assert applicable[0].document_type == "insurance"
+    assert applicable[0].expiry_required is True

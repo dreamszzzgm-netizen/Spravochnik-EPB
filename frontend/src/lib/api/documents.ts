@@ -13,6 +13,7 @@ export interface OrganizationDocumentResponse {
   expires_at: string | null;
   created_at: string;
   updated_at: string;
+  status: "expired" | "expiring_14" | "expiring_40" | "valid" | "no_expiry";
 }
 
 export interface OrganizationDocumentListResponse {

@@ -136,6 +136,7 @@ export default function ReportsPage() {
                 <Badge variant="secondary">15–40 дней: {documents.expiring_40}</Badge>
                 <Badge variant="outline">Не загружены: {documents.missing}</Badge>
                 <Badge variant="outline">Без срока: {documents.no_expiry}</Badge>
+                <Badge variant="outline">Действуют: {documents.valid}</Badge>
               </div>
 
               {documents.issues.length === 0 ? (
@@ -157,7 +158,7 @@ export default function ReportsPage() {
                       {documents.issues.map((issue, index) => (
                         <tr key={`${issue.organization_id}-${issue.document_type}-${issue.status}-${index}`}>
                           <td className="px-4 py-3">
-                            <Link className="font-medium hover:underline" href={`/organizations/${issue.organization_id}`}>
+                            <Link className="font-medium hover:underline" href={`/organizations/${issue.organization_id}/documents`}>
                               {issue.organization_name}
                             </Link>
                           </td>

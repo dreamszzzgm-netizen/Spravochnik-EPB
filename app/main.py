@@ -9,6 +9,7 @@ from app.modules.buildings.routes import router as buildings_router
 from app.modules.contracts.routes import reference_router as contracts_reference_router
 from app.modules.contracts.routes import router as contracts_router
 from app.modules.custom_fields.routes import router as custom_fields_router
+from app.modules.documents.requirement_routes import router as document_requirements_router
 from app.modules.documents.routes import router as documents_router
 from app.modules.identity.routes import router as identity_router
 from app.modules.opo.reference_routes import router as reference_router
@@ -45,6 +46,7 @@ app.include_router(health_router)
 app.include_router(identity_router)
 app.include_router(organizations_router)
 app.include_router(documents_router)
+app.include_router(document_requirements_router)
 app.include_router(opo_router)
 app.include_router(technical_devices_router)
 app.include_router(buildings_router)
