@@ -8,10 +8,10 @@ from app.modules.identity.authorization import AuthorizationContext
 from app.modules.identity.dependencies import require_scoped_permission
 from app.modules.workflows import repository
 from app.modules.workflows.schemas import (
+    WorkflowTaskTemplateResponse,
     WorkflowTemplateCreate,
     WorkflowTemplateDetailResponse,
     WorkflowTemplateResponse,
-    WorkflowTaskTemplateResponse,
     WorkflowVersionCreate,
     WorkflowVersionResponse,
 )
