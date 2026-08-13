@@ -1,3 +1,5 @@
+# ruff: noqa: I001
+
 from app.modules.organizations.enums import IdentifierType, OrganizationType
 from app.modules.organizations.importer import parse_organization_requisites
 from app.modules.organizations.schemas import OrganizationCreate
