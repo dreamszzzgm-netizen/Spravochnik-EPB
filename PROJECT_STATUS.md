@@ -56,18 +56,25 @@ Integration branch: `agent/integration-cp52-smart-import-hardening` (local merge
 - OCR runtime: local Tesseract **not installed** (`OCR_RUNTIME_AVAILABLE = NO`); OCR code is green via mocks/stubs, `TESSERACT_CMD`/`TESSERACT_LANG` documented in `.env.example`.
 - Reports/Documents source (`agent/reports-document-control-ready`): integrated into the new branch described below.
 
-## Reports and Organization Documents integration
+## Reports and Organization Documents — MERGED
 
-Integration branch: `agent/integration-reports-documents`, based on the verified CP5.2 + Smart Import hardening branch and preserving the source history from `agent/reports-document-control-ready`.
+Source branch `agent/integration-reports-documents` (PR #16) merged into the canonical integration branch `agent/integration-cp52-smart-import-hardening` via merge commit `7426cb2`. Independent review passed with no P0/P1/P2 findings; only non-blocking P3 backlog items recorded.
 
-- Reports: **complete in the integration branch**; `/api/reports/management` uses live organization, contract, task and document data and remains superuser-only.
-- Organization Documents: **complete in the integration branch**; organization-scoped list/upload/download/soft-delete uses `LocalFileStorage` and `STORAGE_ROOT`.
-- Document Completeness: **complete in the integration branch**; administrator-managed requirements support `all` and `has_opo`, and missing documents are derived only from active required applicable rules.
+- Reports: **COMPLETE**; `/api/reports/management` uses live organization, contract, task and document data and remains superuser-only.
+- Organization Documents: **COMPLETE**; organization-scoped list/upload/download/soft-delete uses `LocalFileStorage` and `STORAGE_ROOT`.
+- Document Completeness: **COMPLETE**; administrator-managed requirements support `all` and `has_opo`, and missing documents are derived only from active required applicable rules.
 - Documents workspace: `/organizations/[id]/documents`, linked directly from the organization card; no global Documents navigation item was added.
 - Alembic: **single head** `0016_documents`; linear chain `0013_stage5_tasks_core -> 0014_stage5_workflow_engine -> 0015_org_legal_form_fields -> 0016_documents`.
 - Migration round-trip on disposable PostgreSQL port `5433`: `0016_documents -> 0015_org_legal_form_fields -> 0016_documents` PASS; `document_requirements` and `organization_documents` verified.
-- Backend regression on disposable PostgreSQL: **594 passed / 0 skipped / 0 failed**; Ruff PASS.
-- Frontend: lint PASS, typecheck PASS, tests **84 passed**, production build PASS.
+- Backend regression (post-merge, disposable PostgreSQL): **594 passed / 0 skipped / 0 failed**; Ruff PASS.
+- Frontend (post-merge): lint PASS, typecheck PASS, tests **84 passed**, production build PASS.
+- CI on PR #16: 4/4 checks success; auto-merge was off; `main` untouched.
+
+### Canonical integration baseline
+
+- Canonical branch: `agent/integration-cp52-smart-import-hardening` (HEAD `7426cb2888771551797e66f137531ff8029e6d6f`).
+- Contains: CP5.2 Workflow Engine, Organization Smart Import (+ hardening), Reports, Organization Documents, Document Completeness.
+- Current Alembic head: `0016_documents`.
 
 ## Stage 5 boundary / deferred work
 
