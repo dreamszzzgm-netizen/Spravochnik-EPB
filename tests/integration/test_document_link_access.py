@@ -35,7 +35,7 @@ def _reset_database(engine) -> None:
                 TRUNCATE TABLE
                     document_links, document_versions, documents,
                     audit_events, expertise_status_history, expertise_contract_items,
-                    expertise_subjects, expertises, contracts, expertise_types,
+                    expertise_subjects, expertises, contracts,
                     task_assignees, task_organizations, task_contracts,
                     task_contract_items, task_technical_devices, task_buildings,
                     task_opos, tasks, opo, technical_devices, buildings,
@@ -235,8 +235,14 @@ def test_all_seven_typed_targets_persist_and_invalid_targets_fail_closed(tmp_pat
                 building_type=BuildingType.OTHER,
                 organization_id=organization.id,
             )
-            expertise_type = ExpertiseType(code=f"target-{uuid.uuid4()}", name="Target type")
-            db.add_all([opo, device, building, expertise_type])
+            expertise_type = db.scalar(
+                select(ExpertiseType).where(
+                    ExpertiseType.code == "technical_device_epb",
+                    ExpertiseType.is_active.is_(True),
+                )
+            )
+            assert expertise_type is not None
+            db.add_all([opo, device, building])
             db.flush()
             contract = Contract(
                 customer_organization_id=organization.id,
