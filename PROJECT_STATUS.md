@@ -1,141 +1,468 @@
 # Project status
 
-## Current verified development baseline
+**Last synchronized:** 2026-08-14  
+**Roadmap basis:** `DEVELOPMENT_PLAN.md` v2.0 (2026-08-13), `ARCHITECTURE Spravoshnik EPB.md`, `README_Spravochnik.md`, approved Stage 7 design/plan.
 
-- Official integration GREEN baseline remains unchanged: `650008fc5a80eaf6165d2d0aba249041aae2a98d`.
-- Stacked parent checkpoint: **Stage 5 / CP5.1 — Tasks Core backend**, HEAD `c7f6efbd16796f6ac207e5717045cc1bc3994d08`.
-- Active checkpoint: **Stage 5 / CP5.2 — Workflow Engine backend**.
-- Feature branch: `agent/stage5-cp52-workflow-engine`.
-- Draft PR: `#11`, stacked on `agent/stage5-cp51-tasks-core`.
-- Functional code head: `dc23aae6779f193cd9f36bdd11ec507907d2597b`.
-- Documentation-complete verified head before this status-only synchronization: `7e4c49535f6fb6efb18670a1841f6f3c8b17299b`.
-- Alembic head: `0014_stage5_workflow_engine`.
-- Final verification: GitHub Actions run `31694161900` (#442) — Ruff PASS, `alembic upgrade head` PASS, pytest PASS. The immediately preceding full evidence run `31693756568` (#420) reported **562 passed / 289 warnings**; run #442 passed the same complete suite after the warning-cleanup and documentation commits.
+## 1. Current development baseline
 
-## Completed through CP5.2
+### Canonical integration
 
-- Stage 0 — application foundation.
-- Stage 1 — identity, sessions, RBAC, permission scopes and audit foundation.
-- Stage 2 — organizations and contacts.
-- Stage 3 — OPO, technical devices, buildings, custom fields and scoped authorization closure.
-- Stage 4 CP4.1 — Contracts Core backend.
-- Stage 4 CP4.2 — Contract Lifecycle and Addenda backend.
-- Stage 5 CP5.1 — Tasks Core backend.
-- Stage 5 CP5.2 — Workflow Engine backend:
-  - migration `0014_stage5_workflow_engine`;
-  - logical workflow templates with stable unique codes;
-  - numbered workflow template versions;
-  - publication through `published_at`;
-  - published versions and their task definitions are immutable by API/service contract;
-  - ordered workflow task templates with title, description, business-function assignee, relative due days, priority and required flag;
-  - generated tasks preserve exact `source_workflow_template_version_id` and `source_workflow_task_template_id` provenance;
-  - source version/task-template provenance is protected by a composite FK and all-or-none CHECK constraint;
-  - employee business-function assignment is separate from authorization roles;
-  - automatic assignee resolution excludes soft-deleted employees and employees absent on the workflow anchor date;
-  - missing eligible assignee fails closed before task creation;
-  - workflow instantiation uses the latest published version only;
-  - due-date calculation is injected through a resolver so CP5.2 does not invent a temporary production-calendar implementation;
-  - workflow-generated work is created as ordinary CP5.1 tasks and keeps normal task validation/audit behavior;
-  - `TaskService.create_task(..., commit=False)` allows a higher application service to own a transaction while preserving default standalone behavior;
-  - whole workflow instantiation is atomic: any late failure rolls back all generated tasks;
-  - management HTTP API for list/create/detail/version creation/version list/publish;
-  - all workflow management endpoints require the exact backend permission `workflows.manage`;
-  - audit events cover template creation, version creation, publication and instantiation;
-  - migration, service, transaction, instantiation, authorization and API coverage added.
+- Canonical integration branch: `agent/integration-cp52-smart-import-hardening`.
+- Current canonical HEAD: `14b85a2587532566800a0c45b48c59f1fee12225`.
+- Latest canonical merge: PR #19 — **Organizations 2.0 + Smart Import (CP-N1..N3)**.
+- Canonical Alembic head: `0020_identifier_constraints`.
+- Canonical contains:
+  - Stage 0 application foundation;
+  - Stage 1 identity / sessions / RBAC / scoped permissions / audit foundation;
+  - Stage 2 organizations / contacts;
+  - Stage 3 OPO / Technical Devices / Buildings / custom fields / authorization closure;
+  - Stage 4 Contracts Core + Contract Lifecycle/Addenda;
+  - Stage 5 Tasks Core + Workflow Engine;
+  - Organization Smart Import base + hardening;
+  - Reports + Organization Documents + Document Completeness;
+  - Expertise Core CP6.1;
+  - Organizations 2.0 + persistent ImportSession/ImportCandidate workflow CP-N1..N3.
 
-## Organization Smart Import — base + hardening integrated
+### Active implementation checkpoint
 
-Integration branch: `agent/integration-cp52-smart-import-hardening` (local merge of CP5.2 + Smart Import base + Smart Import hardening; merge commit `3415cf2`).
+- Active checkpoint: **Stage 7 / CP7.1 — Universal Documents Core**.
+- Active branch: `agent/stage7-cp71-universal-documents`.
+- Active HEAD before this status update: `8bbb1c11ad3e097ca2a38bc61dd661ea13480de3`.
+- Branch relation to canonical: **ahead only**, merge-base equals canonical HEAD `14b85a2`; no canonical commits are missing from the CP7.1 branch.
+- Current Alembic head on CP7.1: `0021_universal_documents`.
 
-- CP5.2 Workflow Engine: **complete** (`agent/stage5-cp52-workflow-engine`).
-- Organization Smart Import base: **integrated** — migration re-chained as `0015_org_legal_form_fields`.
-- Organization Smart Import hardening: **integrated** (`agent/parallel-org-smart-import-hardening`, PR #13) — legal-form-aware fields, server-side legal-form rules, read-only import preview pipeline, local OCR adapter, hardened create/edit routes served through a Next.js proxy while user URLs stay `/organizations/new` and `/organizations/[id]/edit`.
-- Alembic: **single head** `0015_org_legal_form_fields`; linear chain `0013_stage5_tasks_core -> 0014_stage5_workflow_engine -> 0015_org_legal_form_fields`.
-- Backend regression on disposable test PostgreSQL (port `5433`): **579 passed / 0 skipped / 0 failed**; `ruff check app tests` PASS.
-- Frontend: lint PASS, typecheck PASS, tests **80 passed**, production build PASS.
-- OCR runtime: local Tesseract **not installed** (`OCR_RUNTIME_AVAILABLE = NO`); OCR code is green via mocks/stubs, `TESSERACT_CMD`/`TESSERACT_LANG` documented in `.env.example`.
-- Reports/Documents source (`agent/reports-document-control-ready`): integrated into the new branch described below.
+### Latest CP7.1 verification
 
-## Reports and Organization Documents — MERGED
+GitHub Actions run `31830131769` on HEAD `8bbb1c11ad3e097ca2a38bc61dd661ea13480de3`:
 
-Source branch `agent/integration-reports-documents` (PR #16) merged into the canonical integration branch `agent/integration-cp52-smart-import-hardening` via merge commit `7426cb2`. Independent review passed with no P0/P1/P2 findings; only non-blocking P3 backlog items recorded.
+- `ruff check app tests` — **PASS**;
+- single Alembic head check — **PASS** (`0021_universal_documents`);
+- `alembic upgrade head` — **PASS**;
+- backend pytest — **704 passed / 0 failed / 300 warnings**;
+- PostgreSQL 17 test service — **PASS**.
 
-- Reports: **COMPLETE**; `/api/reports/management` uses live organization, contract, task and document data and remains superuser-only.
-- Organization Documents: **COMPLETE**; organization-scoped list/upload/download/soft-delete uses `LocalFileStorage` and `STORAGE_ROOT`.
-- Document Completeness: **COMPLETE**; administrator-managed requirements support `all` and `has_opo`, and missing documents are derived only from active required applicable rules.
-- Documents workspace: `/organizations/[id]/documents`, linked directly from the organization card; no global Documents navigation item was added.
-- Alembic: **single head** `0016_documents`; linear chain `0013_stage5_tasks_core -> 0014_stage5_workflow_engine -> 0015_org_legal_form_fields -> 0016_documents`.
-- Migration round-trip on disposable PostgreSQL port `5433`: `0016_documents -> 0015_org_legal_form_fields -> 0016_documents` PASS; `document_requirements` and `organization_documents` verified.
-- Backend regression (post-merge, disposable PostgreSQL): **594 passed / 0 skipped / 0 failed**; Ruff PASS.
-- Frontend (post-merge): lint PASS, typecheck PASS, tests **84 passed**, production build PASS.
-- CI on PR #16: 4/4 checks success; auto-merge was off; `main` untouched.
+The workflow is still temporarily named/implemented as a diagnostic `pytest -x --tb=short` gate. The full suite passed, but before declaring CP7.1 complete the workflow must be restored to the normal CI form and re-run on the final HEAD.
 
-### Canonical integration baseline
+---
 
-- Canonical branch: `agent/integration-cp52-smart-import-hardening` (HEAD `7426cb2888771551797e66f137531ff8029e6d6f`).
-- Contains: CP5.2 Workflow Engine, Organization Smart Import (+ hardening), Reports, Organization Documents, Document Completeness.
-- Current Alembic head: `0016_documents`.
+## 2. Roadmap status — DEVELOPMENT_PLAN v2.0
 
-## Stage 6 CP6.1 — Expertise Core — MERGED
+### CP5.2 — Workflow Engine core
 
-Source branch `agent/stage6-cp61-expertise-core` (PR #17) merged into the canonical integration branch `agent/integration-cp52-smart-import-hardening` via merge commit `b722b41`. Independent final review passed with no P0/P1/P2 findings.
+**Status: COMPLETE / integrated into canonical.**
 
-- Domain invariant **1 expertise = 1 expertise subject** enforced at DB level (`expertise_subjects.expertise_id UNIQUE` + CHECK `technical_device_id` XOR `building_id`) and at the service layer.
-- `expertises` / `expertise_subjects` / `expertise_contract_items` / `expertise_status_history` tables; FK RESTRICT for historically meaningful references (contract, expertise type, employee, TD, building); soft-delete only, no cascade destroying history.
-- Status machine `preparation -> … -> completed` with `rtn_review -> {registered, rtn_rework}` and `rtn_rework -> ready_for_registration`; unconfirmed transitions fail closed; `completed` terminal.
-- Append-only `expertise_status_history` with `from_status`/`to_status`/`changed_by`/`reason`.
-- Optimistic locking via `version` + expected-version check → `409 Conflict` on mismatch (both PATCH and status mutation).
-- Scoped authorization via existing `expertises.view/create/edit/change_status` permission codes; list filtering applied before count/offset/limit; foreign expertise/contract/item/TD/building fail closed with 404.
-- Alembic: **single head** `0017_expertises`; linear chain `… -> 0016_documents -> 0017_expertises`.
-- Migration round-trip on disposable PostgreSQL port `5433`: `0017_expertises -> 0016_documents -> 0017_expertises` PASS.
-- Backend regression (pre-merge, disposable PostgreSQL): **617 passed / 0 skipped / 0 failed**; Ruff PASS.
-- Backend regression (post-merge, canonical branch): **618 passed / 0 skipped / 0 failed**; Ruff PASS; `alembic heads` single head `0017_expertises`.
-- Frontend: `/expertise` (real paginated list), `/expertise/[id]` (real card + status history), `/expertise/new` (create); mock-data no longer backs the Expertise routes. lint PASS, typecheck PASS, tests **88 passed**, production build PASS (pre- and post-merge).
-- CI on PR #17: 4/4 checks success; auto-merge off; `main` untouched.
+Implemented:
 
-### Canonical integration baseline
+- logical workflow templates with stable codes;
+- numbered versions and explicit publication;
+- ordered task templates;
+- business-function assignee selection;
+- relative due dates through injected resolver;
+- priority / order / required flag;
+- provenance from created task to workflow version/task template;
+- atomic instantiation;
+- duplicate-safe workflow behavior;
+- backend permission `workflows.manage`;
+- audit coverage;
+- migration/service/transaction/API/security tests.
 
-- Canonical branch: `agent/integration-cp52-smart-import-hardening` (HEAD `b722b41`).
-- Contains: CP5.2 Workflow Engine, Organization Smart Import (+ hardening), Reports, Organization Documents, Document Completeness, Expertise Core.
-- Current Alembic head: `0017_expertises`.
+Still intentionally deferred outside CP5.2:
 
+- frontend workflow-management UI;
+- notifications/mentions;
+- WorkingCalendarService implementation;
+- document attachments;
+- CP5.3 Contract ↔ Tasks lifecycle integration.
 
+### CP-N1 / PR1 — Organization Types & Conditional Fields
 
-## Stage 5 boundary / deferred work
+**Status: COMPLETE / merged via PR #19.**
+
+Implemented:
+
+- `LEGAL_ENTITY`, `SOLE_PROPRIETOR`, `BRANCH`;
+- legal-form-aware validation;
+- branch parent organization relation;
+- IP-specific OGRNIP / residence / passport fields;
+- legal-entity/branch-specific OGRN/KPP behavior;
+- bank details;
+- organization completeness assessment/UI;
+- identifier constraints for head organizations and branches;
+- backend/frontend regression coverage.
+
+### CP-N2 / PR2 — ImportSession + Organization Excel Preview
+
+**Status: COMPLETE / merged via PR #19.**
+
+Implemented:
+
+- persistent `ImportSession` / candidates;
+- XLSX batch parser;
+- Russian header/synonym normalization;
+- identifier normalization;
+- candidate validation;
+- duplicate/conflict classification;
+- preview before persistence;
+- non-destructive handling of ambiguous INN-only matches;
+- deterministic branch matching by INN + KPP.
+
+### CP-N3 / PR2 — Confirmed Organization Import + Import Report
+
+**Status: COMPLETE / merged via PR #19.**
+
+Implemented:
+
+- explicit user confirmation;
+- create/update decisions;
+- conflict decisions;
+- transactional apply;
+- persistent import report;
+- audit;
+- repeat-import duplicate hardening.
+
+### PR3 — Recognition / Smart Fill
+
+**Status: PARTIAL.**
+
+Implemented:
+
+- local organization requisites parsing / OCR adapter;
+- read-only preview before normal domain save;
+- PDF/image processing support in the local recognition path;
+- no direct write from recognition into working organization tables.
+
+Not yet complete relative to DEVELOPMENT_PLAN v2.0:
+
+- full generalized Recognition subsystem for all declared formats/types;
+- confidence model and field-level uncertainty UX as a complete product flow;
+- expansion to OPO data, Technical Device passports and contracts;
+- fully productized local OCR runtime/deployment validation;
+- AI Gateway policy integration for optional external recognition.
+
+### PR4 / CP-N4 — Documents & Compliance Control
+
+**Status: ACTIVE / substantially implemented, not yet closed.**
+
+Already merged in canonical (PR #16):
+
+- organization-scoped document workspace;
+- local private file storage;
+- upload/download/soft delete;
+- checksum and size metadata;
+- administrator-managed document completeness requirements;
+- applicability `all` / `has_opo`;
+- missing/expired/expiring/no-expiry calculations;
+- management-report integration.
+
+Implemented on active CP7.1 branch:
+
+- universal logical `Document`;
+- immutable `DocumentVersion` records;
+- `DocumentLink` with real typed FKs;
+- supported targets: Organization, OPO, Technical Device, Building, Contract, Expertise, Task;
+- one physical file/logical document can have multiple business links without binary duplication;
+- lossless migration from legacy `organization_documents` to universal documents;
+- guarded fail-closed downgrade when universal state cannot be represented losslessly;
+- current-version ownership constraints;
+- optimistic metadata locking;
+- soft delete and restore;
+- audit for document lifecycle and link operations;
+- scope-aware document access with anti-enumeration behavior;
+- immutable file-version creation;
+- streaming upload size enforcement (20 MiB);
+- MIME/extension policy;
+- atomic local-file promotion and cleanup on failed DB operations;
+- compatibility facade preserving Organization Documents API/UX;
+- management-report repository migrated away from legacy `OrganizationDocument` dependency;
+- dedicated migration/repository/service/security/HTTP/storage tests.
+
+Still required before PR4 / CP-N4 can be called complete:
+
+1. restore normal CI workflow and run final full backend gate;
+2. create CP7.1 completion review;
+3. update final diff review / remove any diagnostic-only CI changes;
+4. open Draft PR `agent/stage7-cp71-universal-documents -> agent/integration-cp52-smart-import-hardening`;
+5. merge only after review/approval;
+6. finish configurable **Document Types** as a first-class settings model (scope, date/expiry requirements, allowed formats, required flag, ordering and applicability rules);
+7. unify validity policy to the DEVELOPMENT_PLAN intervals and statuses required by CP-N4;
+8. complete Compliance Engine beyond the current organization-level required-document rules.
+
+### PR5 / CP-N5 — Management Reports
+
+**Status: PARTIAL / working foundation exists.**
+
+Implemented:
+
+- real `/api/reports/management` data source;
+- real `/reports` UI foundation;
+- organization/contract/task/document management data;
+- document states including expired, expiring, valid, missing and no-expiry;
+- deep-link from report problem to organization documents;
+- report calculation remains a read model, not a second business-data source.
+
+Not complete relative to DEVELOPMENT_PLAN v2.0:
+
+- exact `5 / 14 / 30` document intervals (historical implementation uses `14 / 40` buckets in part of the report layer);
+- complete organization-quality reports;
+- complete task reports by 5/14/30 / assignee / workflow source / period;
+- full drill-down parity for every KPI;
+- server-side scoped pagination/count verification for all report lists;
+- report export where approved.
+
+### PR6 — Workflow & Tasks 2.0
+
+**Status: PARTIAL, strong backend core exists.**
+
+Implemented:
+
+- Task Core CRUD;
+- multiple assignees;
+- priorities and statuses;
+- computed overdue state;
+- links to organizations/contracts/contract items/OPO/TD/buildings and expertise support in active domain code;
+- comments;
+- soft delete/restore;
+- scoped authorization;
+- Workflow Engine CP5.2;
+- workflow provenance and atomic generation.
+
+Still required:
+
+- full checklist subsystem;
+- document attachments through universal Documents;
+- full frontend Tasks migration / UX completeness where still mock/partial;
+- operational templates from DEVELOPMENT_PLAN;
+- user-facing workflow management;
+- deadline/calendar/notification integration;
+- CP5.3 Contract ↔ Tasks lifecycle integration.
+
+### PR7 — OPO Workspace
+
+**Status: CORE IMPLEMENTED / operational workspace incomplete.**
+
+Existing Stage 3 foundation provides:
+
+- OPO entity;
+- owner/operator organization links;
+- OPO scope/security;
+- CRUD and custom-field foundation;
+- soft-delete/security behavior.
+
+Still required:
+
+- full OPO workspace UX/tabs from roadmap;
+- universal Documents/Compliance integration in the OPO card;
+- control-date/report/calendar integration;
+- Smart Import/Recognition for OPO data.
+
+### PR8 — Technical Devices & Buildings
+
+**Status: CORE IMPLEMENTED / operational workspace incomplete.**
+
+Existing Stage 3 foundation provides:
+
+- separate Technical Device and Building entities;
+- optional OPO linkage;
+- ability to exist independently of OPO;
+- custom-field definitions/typed values;
+- parent-scope security.
+
+Still required:
+
+- complete operational card UX;
+- passport/document flow through universal Documents;
+- control dates;
+- Reports/Calendar integration;
+- Recognition for Technical Device passports.
+
+### PR9 — Contracts Operational MVP+
+
+**Status: SUBSTANTIALLY IMPLEMENTED / integrations remain.**
+
+Implemented:
+
+- Contracts Core;
+- 1 contract -> N contract items;
+- money calculation;
+- responsible users;
+- scoped authorization;
+- lifecycle/status state machine;
+- signing prerequisites;
+- suspension/resume;
+- termination;
+- completion readiness framework;
+- additional agreements;
+- optimistic/concurrency protections where required by the checkpoint.
+
+Still required:
+
+- CP5.3 Contract ↔ Tasks lifecycle integration;
+- universal Documents integration in final operational UX;
+- workflow launch/integration from contract scenarios;
+- final user-facing Contracts API/UI migration where still incomplete;
+- readiness providers for modules intentionally deferred to their owning stages.
+
+### PR10 — Calendar, Deadlines & Notifications
+
+**Status: NOT IMPLEMENTED as a complete product module.**
+
+There is scheduler/worker infrastructure in the Pilot deployment, but the roadmap still requires:
+
+- `CalendarService` aggregation;
+- document/OPO/TD/building/contract/task sources;
+- user-configurable 30/14/5 warning intervals;
+- in-app notifications;
+- idempotent notification generation;
+- security-scoped calendar access.
+
+### PR11 — Document Generation
+
+**Status: NOT IMPLEMENTED as the target subsystem.**
+
+Still required:
+
+- TemplateRegistry/versioning;
+- Context Builder;
+- business-rule preparation;
+- DOCX renderer;
+- optional PDF;
+- generated files persisted through universal Documents;
+- generation permissions and tests.
+
+### PR12 — NPD & Corporate Knowledge Base
+
+**Status: NOT IMPLEMENTED as the target subsystem.**
+
+Still required:
+
+- structured NPD registry;
+- metadata and local files;
+- local full-text/structured search;
+- ACL-aware corporate materials;
+- controlled actuality update flow.
+
+### PR13 — AI Gateway + RAG
+
+**Status: NOT IMPLEMENTED as the target subsystem.**
+
+Existing OCR/import work is only a foundation. Still required:
+
+- unified AI Gateway;
+- policy / permission / data-classification checks;
+- PII sanitation and confirmation;
+- local-first routing;
+- ACL-filtered RAG;
+- source-backed answers;
+- external AI disable switch and safety tests.
+
+---
+
+## 3. Expertise pause / Resume Gate
+
+Development priority remains outside the full Expertise feature set according to DEVELOPMENT_PLAN v2.0.
+
+### Already integrated
+
+Stage 6 CP6.1 Expertise Core is merged into canonical:
+
+- `1 Expertise = exactly 1 ExpertiseSubjectRef` enforced in DB/service;
+- technical-device/building subject XOR;
+- contract-item links;
+- status history/state machine;
+- optimistic locking;
+- scoped permissions/IDOR protection;
+- real frontend list/detail/create foundation.
+
+### Not part of current priority
+
+Do not continue now without an explicit Expertise Resume Gate:
+
+- inspection;
+- diagnostics/NDT;
+- defects/photos;
+- calculations;
+- conclusion generation;
+- RTN registration attempts;
+- expert-specific workflow expansion;
+- AI assistance for expertise work.
+
+PR #18 (CP6.2 Expertise Collaboration) remains separate/open and is not part of the current canonical roadmap priority unless explicitly resumed.
+
+---
+
+## 4. CP-N1..N5 control point
+
+| Checkpoint | Status |
+| --- | --- |
+| CP-N1 — Organization Types & Conditional Fields | **DONE** |
+| CP-N2 — ImportSession + Organization Excel Preview | **DONE** |
+| CP-N3 — Confirmed Organization Import + Import Report | **DONE** |
+| CP-N4 — Document Types + Validity + Required Rules | **IN PROGRESS** |
+| CP-N5 — `/reports` Document Control MVP | **PARTIAL / needs alignment to final acceptance** |
+
+The product-review gate from DEVELOPMENT_PLAN §33 must be performed only after CP-N4 and CP-N5 are both closed against their final acceptance criteria.
+
+---
+
+## 5. Immediate next actions
+
+1. Finish CP7.1 Universal Documents checkpoint:
+   - restore normal `.github/workflows/ci.yml`;
+   - re-run full backend verification on final HEAD;
+   - record completion review;
+   - review final diff;
+   - open Draft PR to canonical integration;
+   - merge only after explicit review/approval.
+2. Complete CP-N4:
+   - configurable Document Types;
+   - unified validity states/thresholds;
+   - Compliance rules beyond current organization-only requirements;
+   - entity-card Compliance UX.
+3. Complete CP-N5:
+   - exact 5/14/30 report buckets;
+   - scope-safe KPI/drill-down parity;
+   - organization/task report completeness.
+4. Run DEVELOPMENT_PLAN §33 product review.
+5. Only then choose the next operational block: PR6 integrations or PR7 OPO workspace.
+
+---
+
+## 6. Deferred / known boundaries
 
 ### CP5.3 — Contract ↔ Tasks integration
 
-Deferred intentionally:
+Still deferred:
 
-- first real linked work start driving internal contract `signed -> in_progress`;
-- task deadline pause/shift on contract suspension/resume;
+- first linked work start driving internal `signed -> in_progress`;
+- task deadline pause/shift during contract suspension;
 - unfinished task cancellation on contract termination;
-- real Tasks completion-readiness provider for contracts.
+- real task completion-readiness provider for contracts.
 
-### Later owning stages
+### Recognition runtime
 
-- Stage 6 adds Expertise-triggered workflow instantiation and `task_expertises` after the physical `expertises` table exists.
-- Stage 8 adds task document attachments and broader document/comment relations.
-- Notifications/mentions remain later work.
-- Frontend workflow management UI is not part of CP5.2.
-- Production calendar behavior remains owned by `WorkingCalendarService`; CP5.2 only consumes an injected due-date resolver.
+Local OCR/recognition code exists, but runtime availability must be verified on the target Pilot server (Tesseract/configuration) before Recognition can be considered production-ready.
 
-The exact CP5.2 implementation contract is recorded in:
+### Pilot deployment
 
-`docs/superpowers/plans/2026-08-13-stage5-cp52-workflow-engine.md`.
+Stage 5.9 Pilot Deployment remains an independent operational checkpoint. Target architecture remains LAN/VPN, PostgreSQL, local file storage, worker/scheduler and controlled migrations/backups. No public-internet deployment is assumed.
 
-Completion evidence is recorded in:
+### Document storage
 
-`docs/superpowers/reviews/2026-08-13-stage5-cp52-workflow-engine-completion.md`.
+Files remain server-local and private. User filenames are metadata only; storage keys are internal identifiers. Soft delete does not physically destroy file content until a separate retention/permanent-delete policy is explicitly designed and approved.
 
-## Pilot deployment policy
+---
 
-Stage 5.9 — Pilot Deployment v0.1 remains an independent stacked operational branch. CP5.2 does not rebase, merge or modify the Pilot branch automatically.
+## 7. Definition of Done reminder
 
-The pilot deployment packages the existing modular monolith for a LAN server with PostgreSQL, backend, worker/scheduler, Next.js frontend, local storage, controlled migrations, administrator bootstrap, health checks and backup tooling.
+A checkpoint is not marked `DONE` merely because production code exists. Final closure still requires, where applicable:
 
-The pilot is not a public-internet deployment. Remote access remains VPN/LAN oriented.
-
-## Integration policy
-
-CP5.2 is a stacked checkpoint on top of CP5.1 and is prepared for review as **draft PR #11** only. **Do not merge CP5.2 into `codex/feat-gigastudio-frontend-integration`, Pilot or another integration branch automatically.** Integration remains untouched until explicit user approval.
+- backend business/security tests;
+- migration verification;
+- lint;
+- frontend lint/typecheck/tests/build when frontend is affected;
+- browser acceptance for the user scenario;
+- no blocking defects;
+- final diff review;
+- reproducible migration/version state;
+- documented completion evidence;
+- Git actions consistent with repository safety rules.
