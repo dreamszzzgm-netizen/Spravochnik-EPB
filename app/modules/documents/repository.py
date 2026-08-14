@@ -11,6 +11,7 @@ from app.modules.documents.models import (
     DocumentRequirement,
     DocumentVersion,
 )
+from app.modules.documents.targets import DocumentTarget
 
 _REQUIRED_TABLES = (
     "documents",
@@ -100,6 +101,33 @@ def list_document_links(db: Session, document_id: uuid.UUID) -> list[DocumentLin
             .where(DocumentLink.document_id == document_id)
             .order_by(DocumentLink.created_at.asc(), DocumentLink.id.asc())
         ).all()
+    )
+
+
+def get_document_link(
+    db: Session,
+    document_id: uuid.UUID,
+    link_id: uuid.UUID,
+) -> DocumentLink | None:
+    return db.scalar(
+        select(DocumentLink).where(
+            DocumentLink.id == link_id,
+            DocumentLink.document_id == document_id,
+        )
+    )
+
+
+def find_document_link_for_target(
+    db: Session,
+    document_id: uuid.UUID,
+    target: DocumentTarget,
+) -> DocumentLink | None:
+    target_name, target_id = target.non_null_items()[0]
+    return db.scalar(
+        select(DocumentLink).where(
+            DocumentLink.document_id == document_id,
+            getattr(DocumentLink, target_name) == target_id,
+        )
     )
 
 
