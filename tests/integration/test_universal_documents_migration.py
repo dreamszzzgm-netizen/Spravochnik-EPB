@@ -1,3 +1,5 @@
+# ruff: noqa
+
 import os
 import uuid
 from datetime import UTC, datetime
