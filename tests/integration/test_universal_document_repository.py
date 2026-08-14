@@ -1,4 +1,5 @@
 import os
+from datetime import UTC, datetime
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
@@ -34,7 +35,7 @@ def _add_document(
     document = Document(
         document_type="insurance",
         title=title,
-        deleted_at=text("CURRENT_TIMESTAMP") if deleted else None,
+        deleted_at=datetime.now(UTC) if deleted else None,
     )
     db.add(document)
     db.flush()
