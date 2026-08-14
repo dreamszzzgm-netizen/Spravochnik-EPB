@@ -1,5 +1,3 @@
-# ruff: noqa: I001
-
 import uuid
 
 import pytest
