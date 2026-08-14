@@ -12,7 +12,7 @@ from alembic import command
 pytestmark = pytest.mark.integration
 
 STAGE3_NS = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
-CURRENT_HEAD = "0020_identifier_constraints"
+CURRENT_HEAD = "0021_universal_documents"
 
 
 def _config() -> Config:
@@ -216,10 +216,8 @@ def test_0010_ambiguous_backfill_leaves_null(
         )
     engine.dispose()
 
-    # Migration should succeed, not fail
     _run_alembic("upgrade", "head")
 
-    # After migration, organization_id should be NULL (ambiguous ownership)
     engine = _engine()
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
@@ -261,10 +259,8 @@ def test_0010_standalone_backfill_leaves_null(
         )
     engine.dispose()
 
-    # Migration should succeed, not fail
     _run_alembic("upgrade", "head")
 
-    # After migration, organization_id should be NULL (no OPO to backfill from)
     engine = _engine()
     with engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
