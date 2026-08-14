@@ -12,8 +12,8 @@ from app.modules.expertises import repository as expertises_repository
 from app.modules.identity.authorization import (
     AuthorizationContext,
     can_access_building,
-    can_access_organization,
     can_access_opo,
+    can_access_organization,
     can_access_task,
     can_access_technical_device,
 )
