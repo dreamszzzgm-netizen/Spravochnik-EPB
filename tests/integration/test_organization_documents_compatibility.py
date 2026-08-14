@@ -1,6 +1,7 @@
 import os
 import uuid
 from collections.abc import Generator
+from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -66,6 +67,7 @@ def _authorization(user: User) -> AuthorizationContext:
     )
 
 
+@contextmanager
 def _client(
     db: Session,
     authorization: AuthorizationContext,
