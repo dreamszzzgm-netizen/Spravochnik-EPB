@@ -88,6 +88,14 @@ def _insert_legacy_document(
 
 
 def _reset_legacy_state(cfg: Config, engine) -> None:
+    tables = set(inspect(engine).get_table_names())
+    if {"documents", "document_versions", "document_links"} <= tables:
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "TRUNCATE TABLE document_links, document_versions, documents CASCADE"
+                )
+            )
     command.downgrade(cfg, "0020_identifier_constraints")
     with engine.begin() as connection:
         connection.execute(
