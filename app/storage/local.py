@@ -9,6 +9,12 @@ from uuid import uuid4
 from app.storage.base import StoredObjectInfo
 
 
+class StorageLimitExceeded(ValueError):
+    def __init__(self, max_bytes: int):
+        self.max_bytes = max_bytes
+        super().__init__(f"storage object exceeds {max_bytes} bytes")
+
+
 class LocalFileStorage:
     """Private local storage.
 
@@ -30,7 +36,16 @@ class LocalFileStorage:
     def resolve_path(self, storage_key: str) -> Path:
         return self._safe_path(storage_key)
 
-    def put(self, source: BinaryIO, *, storage_key: str | None = None) -> StoredObjectInfo:
+    def put(
+        self,
+        source: BinaryIO,
+        *,
+        storage_key: str | None = None,
+        max_bytes: int | None = None,
+    ) -> StoredObjectInfo:
+        if max_bytes is not None and max_bytes < 0:
+            raise ValueError("max_bytes must be non-negative")
+
         key = storage_key or str(uuid4())
         destination = self._safe_path(key)
         if destination.exists():
@@ -43,8 +58,10 @@ class LocalFileStorage:
         try:
             with os.fdopen(fd, "wb") as temp_file:
                 while chunk := source.read(1024 * 1024):
-                    digest.update(chunk)
                     size += len(chunk)
+                    if max_bytes is not None and size > max_bytes:
+                        raise StorageLimitExceeded(max_bytes)
+                    digest.update(chunk)
                     temp_file.write(chunk)
                 temp_file.flush()
                 os.fsync(temp_file.fileno())
