@@ -38,6 +38,10 @@ class OrganizationLegalFormError(ValueError):
     pass
 
 
+class OrganizationValidationError(ValueError):
+    pass
+
+
 def _has_value(value: str | None) -> bool:
     return value is not None and bool(value.strip())
 
@@ -85,6 +89,106 @@ def validate_organization_legal_form(
         raise OrganizationLegalFormError("ОГРНИП допустим только для ИП")
 
 
+def validate_parent_for_organization(
+    db: Session,
+    *,
+    organization_type: OrganizationType,
+    parent_id: uuid.UUID | None,
+    organization_id: uuid.UUID | None = None,
+    is_update: bool = False,
+    current_type: OrganizationType | None = None,
+    current_parent_id: uuid.UUID | None = None,
+) -> uuid.UUID | None:
+    """Validate parent_id rules for the given organization type.
+
+    Returns the effective parent_id after validation.
+    """
+    target_type = organization_type
+
+    if is_update and target_type is None:
+        target_type = current_type
+
+    if target_type is OrganizationType.BRANCH:
+        if parent_id is None:
+            raise OrganizationValidationError(
+                "Для филиала обязательно указание головной организации"
+            )
+        if parent_id is not None:
+            parent = get_organization(db, parent_id, include_deleted=True)
+            if parent is None:
+                raise OrganizationNotFoundError("Головная организация не найдена")
+            if parent.deleted_at is not None:
+                raise OrganizationValidationError(
+                    "Нельзя выбрать удалённую головную организацию"
+                )
+            if organization_id is not None and parent.id == organization_id:
+                raise OrganizationValidationError(
+                    "Организация не может быть филиалом самой себя"
+                )
+    else:
+        if parent_id is not None:
+            raise OrganizationValidationError(
+                f"Для типа '{target_type.value}' указание головной организации запрещено"
+            )
+
+    return parent_id
+
+
+def assess_organization_completeness(organization: Organization) -> dict:
+    """Evaluate completeness of an organization based on its type."""
+    org_type = organization.organization_type
+
+    def _field(code: str, label: str, filled: bool) -> dict:
+        return {"code": code, "label": label, "filled": filled}
+
+    required_fields = []
+    warning_fields = []
+
+    if org_type is OrganizationType.LEGAL_ENTITY:
+        required_fields = [
+            _field("legal_name", "Полное наименование",
+                   bool(_has_value(organization.legal_name))),
+            _field("inn", "ИНН", False),
+            _field("kpp", "КПП", False),
+            _field("ogrn", "ОГРН", False),
+            _field("legal_address", "Юридический адрес",
+                   bool(_has_value(organization.legal_address))),
+            _field("actual_address", "Фактический адрес",
+                   bool(_has_value(organization.actual_address))),
+            _field("director_name", "Директор",
+                   bool(_has_value(organization.director_name))),
+            _field("bank_details", "Банковские реквизиты",
+                   bool(_has_value(organization.bank_details))),
+            _field("phone", "Телефон", bool(_has_value(organization.phone))),
+            _field("email", "Email", bool(_has_value(organization.email))),
+        ]
+    elif org_type is OrganizationType.INDIVIDUAL_ENTREPRENEUR:
+        required_fields = [
+            _field("legal_name", "ФИО ИП",
+                   bool(_has_value(organization.legal_name))),
+            _field("inn", "ИНН", False),
+            _field("ogrnip", "ОГРНИП", False),
+            _field("residence_address", "Место жительства",
+                   bool(_has_value(organization.residence_address))),
+            _field("passport_details", "Паспортные данные",
+                   bool(_has_value(organization.passport_details))),
+            _field("bank_details", "Банковские реквизиты",
+                   bool(_has_value(organization.bank_details))),
+            _field("phone", "Телефон", bool(_has_value(organization.phone))),
+            _field("email", "Email", bool(_has_value(organization.email))),
+        ]
+    elif org_type is OrganizationType.BRANCH:
+        required_fields = [
+            _field("legal_name", "Наименование", bool(_has_value(organization.legal_name))),
+            _field("parent_id", "Головная организация", organization.parent_id is not None),
+        ]
+
+    return {
+        "required_fields": required_fields,
+        "warning_fields": warning_fields,
+    }
+
+
 class OrganizationService:
     @staticmethod
     def _now() -> datetime:
@@ -118,7 +222,21 @@ class OrganizationService:
                 )
                 db.add(ident)
         for ident in existing.values():
-            self.remove_identifier(db, actor_id=actor_id, identifier=ident)
+            org_id = ident.organization_id
+            db.delete(ident)
+            write_audit(
+                db,
+                action="organization.identifier_removed",
+                summary="Organization identifier removed",
+                result="success",
+                user_id=actor_id,
+                entity_type="organization",
+                entity_id=org_id,
+                metadata={
+                    "identifier_id": str(ident.id),
+                    "identifier_type": ident.identifier_type.value,
+                },
+            )
 
     def create_organization(
         self,
@@ -137,6 +255,7 @@ class OrganizationService:
         phone: str | None = None,
         email: str | None = None,
         comment: str | None = None,
+        bank_details: str | None = None,
         identifiers: list[dict[str, str | bool]] | None = None,
     ) -> Organization:
         validate_organization_legal_form(
@@ -148,15 +267,16 @@ class OrganizationService:
             passport_details=passport_details,
             identifiers=identifiers,
         )
-        if parent_id is not None:
-            parent = get_organization(db, parent_id)
-            if parent is None:
-                raise OrganizationNotFoundError("Parent organization not found")
+        effective_parent_id = validate_parent_for_organization(
+            db,
+            organization_type=organization_type,
+            parent_id=parent_id,
+        )
         organization = Organization(
             legal_name=legal_name,
             short_name=short_name,
             organization_type=organization_type,
-            parent_id=parent_id,
+            parent_id=effective_parent_id,
             legal_address=legal_address,
             actual_address=actual_address,
             residence_address=residence_address,
@@ -165,9 +285,13 @@ class OrganizationService:
             phone=phone,
             email=email,
             comment=comment,
+            bank_details=bank_details,
         )
         db.add(organization)
         db.flush()
+        self._upsert_identifiers_for_organization(
+            db, organization=organization, identifiers=identifiers, actor_id=actor_id
+        )
         write_audit(
             db,
             action="organization.created",
@@ -178,10 +302,6 @@ class OrganizationService:
             entity_id=organization.id,
         )
         db.commit()
-        db.refresh(organization)
-        self._upsert_identifiers_for_organization(
-            db, organization=organization, identifiers=identifiers, actor_id=actor_id
-        )
         db.refresh(organization)
         return organization
 
@@ -203,6 +323,7 @@ class OrganizationService:
         phone: str | None = None,
         email: str | None = None,
         comment: str | None = None,
+        bank_details: str | None = None,
         identifiers: list[dict[str, str | bool]] | None = None,
     ) -> Organization:
         target_type = organization_type or organization.organization_type
@@ -215,10 +336,15 @@ class OrganizationService:
             passport_details=passport_details,
             identifiers=identifiers,
         )
-        if parent_id is not None and parent_id != organization.id:
-            parent = get_organization(db, parent_id)
-            if parent is None:
-                raise OrganizationNotFoundError("Parent organization not found")
+        effective_parent_id = validate_parent_for_organization(
+            db,
+            organization_type=organization_type,
+            parent_id=parent_id,
+            organization_id=organization.id,
+            is_update=True,
+            current_type=organization.organization_type,
+            current_parent_id=organization.parent_id,
+        )
         changed: list[str] = []
         if legal_name is not None and legal_name != organization.legal_name:
             organization.legal_name = legal_name
@@ -229,8 +355,8 @@ class OrganizationService:
         if organization_type is not None and organization_type != organization.organization_type:
             organization.organization_type = organization_type
             changed.append("organization_type")
-        if parent_id != organization.parent_id:
-            organization.parent_id = parent_id
+        if effective_parent_id != organization.parent_id:
+            organization.parent_id = effective_parent_id
             changed.append("parent_id")
 
         if target_type is OrganizationType.INDIVIDUAL_ENTREPRENEUR:
@@ -268,6 +394,13 @@ class OrganizationService:
         if comment is not None and comment != organization.comment:
             organization.comment = comment
             changed.append("comment")
+        if bank_details is not None and bank_details != organization.bank_details:
+            organization.bank_details = bank_details
+            changed.append("bank_details")
+
+        self._upsert_identifiers_for_organization(
+            db, organization=organization, identifiers=identifiers, actor_id=actor_id
+        )
         write_audit(
             db,
             action="organization.updated",
@@ -279,10 +412,6 @@ class OrganizationService:
             metadata={"changed_fields": changed},
         )
         db.commit()
-        db.refresh(organization)
-        self._upsert_identifiers_for_organization(
-            db, organization=organization, identifiers=identifiers, actor_id=actor_id
-        )
         db.refresh(organization)
         return organization
 

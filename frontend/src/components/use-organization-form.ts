@@ -12,7 +12,7 @@ export function useOrganizationForm() {
   const [values, setValues] = useState<OrganizationFormValues>(EMPTY_ORGANIZATION_FORM);
 
   const setText = useCallback((
-    field: Exclude<keyof OrganizationFormValues, "orgType" | "identifiers">,
+    field: Exclude<keyof OrganizationFormValues, "orgType" | "identifiers" | "parentId">,
     value: string,
   ) => setValues((previous) => ({ ...previous, [field]: value })), []);
 
@@ -26,6 +26,10 @@ export function useOrganizationForm() {
       ...previous,
       identifiers: { ...previous.identifiers, [type]: value },
     }));
+  }, []);
+
+  const setParentId = useCallback((value: string) => {
+    setValues((previous) => ({ ...previous, parentId: value }));
   }, []);
 
   const applyImport = useCallback((preview: OrganizationImportPreviewResponse) => {
@@ -52,5 +56,5 @@ export function useOrganizationForm() {
     });
   }, []);
 
-  return { values, setValues, setText, setType, setIdentifier, applyImport };
+  return { values, setValues, setText, setType, setIdentifier, setParentId, applyImport };
 }

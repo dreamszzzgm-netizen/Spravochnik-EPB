@@ -27,7 +27,7 @@ export default function HardenedNewOrganizationPage() {
         <Card>
           <CardHeader><CardTitle>Основные сведения</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            <OrganizationFormFields values={form.values} disabled={save.pending} setText={form.setText} setType={form.setType} setIdentifier={form.setIdentifier} />
+            <OrganizationFormFields values={form.values} disabled={save.pending} setText={form.setText} setType={form.setType} setIdentifier={form.setIdentifier} setParentId={form.setParentId} />
             {save.error && <p className="text-sm text-destructive" role="alert">{save.error}</p>}
             <div className="flex gap-3 pt-2">
               <Button type="submit" disabled={save.pending}>{save.pending ? "Создание…" : "Создать организацию"}</Button>

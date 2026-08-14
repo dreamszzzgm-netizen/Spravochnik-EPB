@@ -117,6 +117,8 @@ export default function NewOrganizationPage() {
           phone: phone.trim() || null,
           email: email.trim() || null,
           comment: comment.trim() || null,
+          bank_details: null,
+          parent_id: null,
           identifiers: identList,
         });
         router.replace(`/organizations/${org.id}`);

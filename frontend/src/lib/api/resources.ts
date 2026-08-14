@@ -5,16 +5,22 @@ import type {
   BuildingResponse,
   CurrentUserResponse,
   HealthResponse,
+  ImportCandidateResponse,
+  ImportReportResponse,
+  ImportSessionListResponse,
+  ImportSessionResponse,
   LoginResponse,
   OPOCreatePayload,
   OPOPaginatedResponse,
   OPOResponse,
+  OrganizationCompletenessResponse,
   OrganizationContactCreatePayload,
   OrganizationContactResponse,
   OrganizationCreatePayload,
   OrganizationIdentifierResponse,
   OrganizationImportPreviewResponse,
   OrganizationPaginatedResponse,
+  OrganizationParentSearchResult,
   OrganizationResponse,
   OrganizationUpdatePayload,
   ReferenceItemResponse,
@@ -174,3 +180,64 @@ export const getHazardSigns = (options: ResourceOptions = {}) =>
 
 export const getActivityTypes = (options: ResourceOptions = {}) =>
   apiRequest<ReferenceItemResponse[]>("/api/reference/activity-types", options);
+
+export const getOrganizationCompleteness = (id: string, options: ResourceOptions = {}) =>
+  apiRequest<OrganizationCompletenessResponse>(`/api/organizations/${id}/completeness`, options);
+
+export const searchOrganizationsForParent = (params: { q?: string; page?: number; page_size?: number; signal?: AbortSignal } = {}) => {
+  const searchParams = new URLSearchParams();
+  if (params.q) searchParams.set("q", params.q);
+  if (params.page != null) searchParams.set("page", String(params.page));
+  if (params.page_size != null) searchParams.set("page_size", String(params.page_size));
+  const qs = searchParams.toString();
+  return apiRequest<OrganizationParentSearchResult[]>(`/api/organizations/search${qs ? `?${qs}` : ""}`, { signal: params.signal });
+};
+
+export const createImportSession = (options: ResourceOptions = {}) =>
+  apiRequest<ImportSessionResponse>("/api/import/sessions", { method: "POST", ...options });
+
+export const uploadImportExcel = (sessionId: string, file: File, options: ResourceOptions = {}) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiRequest<ImportSessionResponse>(`/api/import/sessions/${sessionId}/upload-excel`, {
+    method: "POST",
+    body: formData,
+    ...options,
+  });
+};
+
+export const getImportSessions = (options: ResourceOptions = {}) =>
+  apiRequest<ImportSessionListResponse>("/api/import/sessions", options);
+
+export const getImportSession = (sessionId: string, options: ResourceOptions = {}) =>
+  apiRequest<ImportSessionResponse>(`/api/import/sessions/${sessionId}`, options);
+
+export const getImportCandidates = (sessionId: string, options: ResourceOptions = {}) =>
+  apiRequest<ImportCandidateResponse[]>(`/api/import/sessions/${sessionId}/candidates`, options);
+
+export const updateImportCandidate = (
+  sessionId: string,
+  candidateId: string,
+  payload: { proposed_action: string; normalized_data?: Record<string, unknown> },
+  options: ResourceOptions = {},
+) =>
+  apiRequest<ImportCandidateResponse>(`/api/import/sessions/${sessionId}/candidates/${candidateId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+    ...options,
+  });
+
+export const confirmImportSession = (sessionId: string, options: ResourceOptions = {}) =>
+  apiRequest<ImportSessionResponse>(`/api/import/sessions/${sessionId}/confirm`, {
+    method: "POST",
+    ...options,
+  });
+
+export const getImportReport = (sessionId: string, options: ResourceOptions = {}) =>
+  apiRequest<ImportReportResponse>(`/api/import/sessions/${sessionId}/report`, options);
+
+export const cancelImportSession = (sessionId: string, options: ResourceOptions = {}) =>
+  apiRequest<ImportSessionResponse>(`/api/import/sessions/${sessionId}/cancel`, {
+    method: "POST",
+    ...options,
+  });
