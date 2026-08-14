@@ -1,5 +1,3 @@
-# ruff: noqa: I001
-
 import io
 import os
 import uuid
