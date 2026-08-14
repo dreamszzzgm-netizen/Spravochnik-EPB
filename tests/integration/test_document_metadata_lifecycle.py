@@ -125,11 +125,15 @@ def test_soft_delete_restore_preserves_file_versions_and_audits_safely(tmp_path:
             assert deleted.deleted_by == user.id
             assert deleted.version == 3
             assert repository.get_document(db, document.id) is None
-            assert repository.get_document(db, document.id, include_deleted=True) is not None
+            assert (
+                repository.get_document(db, document.id, include_deleted=True) is not None
+            )
             assert service.storage.exists(storage_key)
             versions = repository.list_versions(db, document.id)
             assert [item.id for item in versions] == [original_version_id]
-            assert db.scalar(select(DocumentVersion).where(DocumentVersion.id == original_version_id))
+            assert db.scalar(
+                select(DocumentVersion).where(DocumentVersion.id == original_version_id)
+            )
 
             restored = service.restore_document(
                 db,
