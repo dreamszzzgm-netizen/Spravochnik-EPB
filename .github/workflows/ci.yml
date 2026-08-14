@@ -43,4 +43,5 @@ jobs:
       - run: alembic upgrade head
       - run: >-
           pytest --confcutdir=tests/integration
-          tests/integration/test_document_link_access.py -q
+          tests/integration/test_document_link_access.py
+          tests/integration/test_document_link_removal.py -q
