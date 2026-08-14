@@ -19,12 +19,12 @@ from app.modules.documents.control import (
     classify_document,
     missing_requirements,
 )
-from app.modules.documents.models import DocumentRequirement, OrganizationDocument
+from app.modules.documents.models import Document, DocumentLink, DocumentRequirement
 from app.modules.opo.models import OPO
 from app.modules.organizations.models import Organization
 from app.modules.tasks.models import Task
 
-_DOCUMENT_TABLES = {"organization_documents", "document_requirements"}
+_DOCUMENT_TABLES = {"documents", "document_versions", "document_links", "document_requirements"}
 
 
 def _document_tables_available(db: Session) -> bool:
@@ -46,11 +46,13 @@ def load_document_control(db: Session, *, today: date) -> DocumentControlSummary
         )
     ).all()
     document_rows = list(
-        db.scalars(
-            select(OrganizationDocument)
-            .join(Organization, Organization.id == OrganizationDocument.organization_id)
+        db.execute(
+            select(Document, DocumentLink.organization_id)
+            .join(DocumentLink, DocumentLink.document_id == Document.id)
+            .join(Organization, Organization.id == DocumentLink.organization_id)
             .where(
-                OrganizationDocument.deleted_at.is_(None),
+                Document.deleted_at.is_(None),
+                DocumentLink.organization_id.is_not(None),
                 Organization.deleted_at.is_(None),
             )
         ).all()
@@ -70,9 +72,9 @@ def load_document_control(db: Session, *, today: date) -> DocumentControlSummary
     ).all()
     opo_organizations = {value for row in opo_rows for value in row}
 
-    documents_by_organization: dict[object, list[OrganizationDocument]] = defaultdict(list)
-    for document in document_rows:
-        documents_by_organization[document.organization_id].append(document)
+    documents_by_organization: dict[object, list[Document]] = defaultdict(list)
+    for document, organization_id in document_rows:
+        documents_by_organization[organization_id].append(document)
 
     requirements = [
         RequirementSnapshot(
