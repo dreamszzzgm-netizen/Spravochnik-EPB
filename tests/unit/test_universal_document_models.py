@@ -1,5 +1,3 @@
-# ruff: noqa
-
 from sqlalchemy import CheckConstraint, UniqueConstraint
 
 from app.modules.documents.enums import DocumentLifecycleStatus
