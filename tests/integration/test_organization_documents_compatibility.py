@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.modules.documents import repository
-from app.modules.documents.models import Document, DocumentVersion
 from app.modules.documents import routes as document_routes
+from app.modules.documents.models import Document, DocumentVersion
 from app.modules.documents.service import DOCUMENT_MAX_BYTES, DocumentService
 from app.modules.identity.authorization import AuthorizationContext
 from app.modules.identity.models import Employee, ScopeType, User
