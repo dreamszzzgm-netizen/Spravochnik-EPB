@@ -23,6 +23,7 @@ class OrganizationBase(BaseModel):
     phone: str | None = Field(default=None, max_length=64)
     email: str | None = Field(default=None, max_length=320)
     comment: str | None = None
+    bank_details: str | None = Field(default=None, max_length=5000)
 
 
 class OrganizationCreate(OrganizationBase):
@@ -42,6 +43,7 @@ class OrganizationUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=64)
     email: str | None = Field(default=None, max_length=320)
     comment: str | None = None
+    bank_details: str | None = Field(default=None, max_length=5000)
 
 
 class OrganizationResponse(BaseModel):
@@ -59,6 +61,7 @@ class OrganizationResponse(BaseModel):
     phone: str | None
     email: str | None
     comment: str | None
+    bank_details: str | None
     parent_id: uuid.UUID | None
     deleted_at: datetime | None
     created_at: datetime
@@ -148,3 +151,22 @@ class OrganizationIdentifierResponse(BaseModel):
     is_primary: bool
     created_at: datetime
     updated_at: datetime
+
+
+class OrganizationCompletenessField(BaseModel):
+    code: str
+    label: str
+    filled: bool
+
+
+class OrganizationCompletenessResponse(BaseModel):
+    status: str  # "complete" | "needs_attention" | "missing_required"
+    missing_required_fields: list[OrganizationCompletenessField]
+    warning_fields: list[OrganizationCompletenessField]
+
+
+class OrganizationParentSearchResult(BaseModel):
+    id: uuid.UUID
+    legal_name: str
+    short_name: str | None
+    organization_type: str

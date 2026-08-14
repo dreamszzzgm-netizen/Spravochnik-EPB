@@ -70,6 +70,8 @@ export interface OrganizationCreatePayload {
   phone: string | null;
   email: string | null;
   comment: string | null;
+  bank_details: string | null;
+  parent_id: string | null;
   identifiers: OrganizationIdentifierCreate[];
 }
 
@@ -85,6 +87,8 @@ export interface OrganizationUpdatePayload {
   phone?: string | null;
   email?: string | null;
   comment?: string | null;
+  bank_details?: string | null;
+  parent_id?: string | null;
   identifiers?: OrganizationIdentifierCreate[] | null;
 }
 
@@ -101,6 +105,7 @@ export interface OrganizationResponse {
   phone: string | null;
   email: string | null;
   comment: string | null;
+  bank_details: string | null;
   parent_id: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -243,4 +248,23 @@ export interface BuildingCreatePayload {
   building_type: BuildingType;
   opo_id: string | null;
   organization_id: string;
+}
+
+export interface OrganizationCompletenessField {
+  code: string;
+  label: string;
+  filled: boolean;
+}
+
+export interface OrganizationCompletenessResponse {
+  status: "complete" | "needs_attention" | "missing_required";
+  missing_required_fields: OrganizationCompletenessField[];
+  warning_fields: OrganizationCompletenessField[];
+}
+
+export interface OrganizationParentSearchResult {
+  id: string;
+  legal_name: string;
+  short_name: string | null;
+  organization_type: string;
 }

@@ -9,12 +9,14 @@ import type {
   OPOCreatePayload,
   OPOPaginatedResponse,
   OPOResponse,
+  OrganizationCompletenessResponse,
   OrganizationContactCreatePayload,
   OrganizationContactResponse,
   OrganizationCreatePayload,
   OrganizationIdentifierResponse,
   OrganizationImportPreviewResponse,
   OrganizationPaginatedResponse,
+  OrganizationParentSearchResult,
   OrganizationResponse,
   OrganizationUpdatePayload,
   ReferenceItemResponse,
@@ -174,3 +176,15 @@ export const getHazardSigns = (options: ResourceOptions = {}) =>
 
 export const getActivityTypes = (options: ResourceOptions = {}) =>
   apiRequest<ReferenceItemResponse[]>("/api/reference/activity-types", options);
+
+export const getOrganizationCompleteness = (id: string, options: ResourceOptions = {}) =>
+  apiRequest<OrganizationCompletenessResponse>(`/api/organizations/${id}/completeness`, options);
+
+export const searchOrganizationsForParent = (params: { q?: string; page?: number; page_size?: number; signal?: AbortSignal } = {}) => {
+  const searchParams = new URLSearchParams();
+  if (params.q) searchParams.set("q", params.q);
+  if (params.page != null) searchParams.set("page", String(params.page));
+  if (params.page_size != null) searchParams.set("page_size", String(params.page_size));
+  const qs = searchParams.toString();
+  return apiRequest<OrganizationParentSearchResult[]>(`/api/organizations/search${qs ? `?${qs}` : ""}`, { signal: params.signal });
+};

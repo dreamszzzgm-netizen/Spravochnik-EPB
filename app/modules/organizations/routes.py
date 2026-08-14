@@ -30,6 +30,8 @@ from app.modules.organizations.repository import (
     list_organizations_paginated,
 )
 from app.modules.organizations.schemas import (
+    OrganizationCompletenessField,
+    OrganizationCompletenessResponse,
     OrganizationContactCreate,
     OrganizationContactResponse,
     OrganizationCreateWithIdentifiers,
@@ -40,6 +42,7 @@ from app.modules.organizations.schemas import (
     OrganizationImportPreviewRequest,
     OrganizationImportPreviewResponse,
     OrganizationPaginatedResponse,
+    OrganizationParentSearchResult,
     OrganizationResponse,
     OrganizationUpdateWithIdentifiers,
 )
@@ -49,6 +52,8 @@ from app.modules.organizations.service import (
     OrganizationLegalFormError,
     OrganizationNotFoundError,
     OrganizationService,
+    OrganizationValidationError,
+    assess_organization_completeness,
 )
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
@@ -201,6 +206,7 @@ def create_organization(
             phone=payload.phone,
             email=payload.email,
             comment=payload.comment,
+            bank_details=payload.bank_details,
             identifiers=(
                 [ident.model_dump() for ident in payload.identifiers]
                 if payload.identifiers
@@ -210,6 +216,8 @@ def create_organization(
     except OrganizationNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OrganizationLegalFormError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OrganizationValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -259,6 +267,7 @@ def update_organization(
             phone=payload.phone,
             email=payload.email,
             comment=payload.comment,
+            bank_details=payload.bank_details,
             identifiers=(
                 [ident.model_dump() for ident in payload.identifiers]
                 if payload.identifiers
@@ -268,6 +277,8 @@ def update_organization(
     except OrganizationNotFoundError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OrganizationLegalFormError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OrganizationValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -455,3 +466,95 @@ def delete_identifier(
         raise HTTPException(status_code=404, detail="Identifier not found")
     service.remove_identifier(db, actor_id=authorization.user_id, identifier=identifier)
     return None
+
+
+@router.get(
+    "/{organization_id}/completeness",
+    response_model=OrganizationCompletenessResponse,
+)
+def read_organization_completeness(
+    organization_id: uuid.UUID,
+    authorization: AuthorizationContext = _dep_view,
+    db: Session = Depends(get_db),
+):
+    organization = _organization_or_404(db, organization_id, authorization)
+    from app.modules.organizations.repository import list_identifiers as _list_ids
+
+    identifiers = _list_ids(db, organization.id)
+    id_map = {i.identifier_type.value: i.identifier_value for i in identifiers}
+
+    result = assess_organization_completeness(organization)
+
+    for field in result["required_fields"]:
+        if field["code"] in ("inn", "kpp", "ogrn", "ogrnip"):
+            field["filled"] = bool(id_map.get(field["code"]))
+
+    missing_required = [f for f in result["required_fields"] if not f["filled"]]
+    if not missing_required:
+        status_label = "complete"
+    elif len(missing_required) == len(result["required_fields"]):
+        status_label = "missing_required"
+    else:
+        status_label = "needs_attention"
+
+    return OrganizationCompletenessResponse(
+        status=status_label,
+        missing_required_fields=[
+            OrganizationCompletenessField(
+                code=f["code"],
+                label=f["label"],
+                filled=f["filled"],
+            )
+            for f in result["required_fields"]
+            if not f["filled"]
+        ],
+        warning_fields=[],
+    )
+
+
+@router.get(
+    "/search",
+    response_model=list[OrganizationParentSearchResult],
+)
+def search_organizations_for_parent(
+    q: str = "",
+    page: int = 1,
+    page_size: int = 20,
+    authorization: AuthorizationContext = _dep_view,
+    db: Session = Depends(get_db),
+):
+    from sqlalchemy import or_, select
+
+    from app.modules.organizations.enums import OrganizationType
+    from app.modules.organizations.models import Organization as OrgModel
+
+    stmt = select(OrgModel).where(OrgModel.deleted_at.is_(None))
+    stmt = stmt.where(
+        OrgModel.organization_type.in_([
+            OrganizationType.LEGAL_ENTITY,
+            OrganizationType.INDIVIDUAL_ENTREPRENEUR,
+        ])
+    )
+    if q:
+        pattern = f"%{q}%"
+        stmt = stmt.where(
+            or_(
+                OrgModel.legal_name.ilike(pattern),
+                OrgModel.short_name.ilike(pattern),
+            )
+        )
+    offset = max(0, page - 1) * page_size
+    items = list(
+        db.scalars(
+            stmt.order_by(OrgModel.legal_name.asc()).offset(offset).limit(page_size)
+        )
+    )
+    return [
+        OrganizationParentSearchResult(
+            id=o.id,
+            legal_name=o.legal_name,
+            short_name=o.short_name,
+            organization_type=o.organization_type.value,
+        )
+        for o in items
+    ]

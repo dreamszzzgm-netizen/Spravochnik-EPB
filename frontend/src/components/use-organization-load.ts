@@ -23,6 +23,7 @@ export function useOrganizationLoad(organizationId: string | undefined, setValue
           legalName: organization.legal_name,
           shortName: organization.short_name ?? "",
           orgType: organization.organization_type,
+          parentId: organization.parent_id ?? "",
           legalAddress: organization.legal_address ?? "",
           actualAddress: organization.actual_address ?? "",
           residenceAddress: organization.residence_address ?? "",
@@ -31,6 +32,7 @@ export function useOrganizationLoad(organizationId: string | undefined, setValue
           phone: organization.phone ?? "",
           email: organization.email ?? "",
           comment: organization.comment ?? "",
+          bankDetails: organization.bank_details ?? "",
           identifiers: map,
         });
       })
