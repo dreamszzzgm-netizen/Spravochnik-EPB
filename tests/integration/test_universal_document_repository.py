@@ -4,13 +4,23 @@ from datetime import UTC, datetime
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from app.modules.buildings.models import Building
+from app.modules.contracts.models import Contract
 from app.modules.documents import repository
 from app.modules.documents.models import Document, DocumentLink, DocumentVersion
+from app.modules.expertises.models import Expertise
+from app.modules.identity.models import User
+from app.modules.opo.models import OPO
 from app.modules.organizations.enums import OrganizationType
 from app.modules.organizations.models import Organization
+from app.modules.tasks.models import Task
+from app.modules.technical_devices.models import TechnicalDevice
+
+_MODEL_BOOTSTRAP = (Building, Contract, Expertise, User, OPO, Task, TechnicalDevice)
 
 
 def _reset_database(engine) -> None:
+    assert _MODEL_BOOTSTRAP
     with engine.begin() as connection:
         connection.execute(
             text(
