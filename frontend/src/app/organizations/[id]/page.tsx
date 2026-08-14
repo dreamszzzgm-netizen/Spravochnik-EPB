@@ -3,15 +3,15 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Building2, FileText, Loader2, Pencil } from "lucide-react";
+import { ArrowLeft, Building2, FileText, Loader2, Pencil, CheckCircle2, AlertTriangle, Landmark } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ApiError } from "@/lib/api/errors";
-import { getOrganization, getOrganizationIdentifiers } from "@/lib/api/resources";
-import type { OrganizationResponse, OrganizationIdentifierResponse } from "@/lib/api/types";
+import { getOrganization, getOrganizationIdentifiers, getOrganizationCompleteness } from "@/lib/api/resources";
+import type { OrganizationResponse, OrganizationIdentifierResponse, OrganizationCompletenessResponse } from "@/lib/api/types";
 import { organizationName, organizationTypeLabel } from "@/lib/api/view-models";
 import { useCan } from "@/lib/auth";
 import { OrganizationContacts } from "./_components/organization-contacts";
@@ -24,15 +24,17 @@ export default function OrganizationWorkspacePage() {
   const id = params.id as string;
   const [org, setOrg] = useState<OrganizationResponse | null>(null);
   const [identifiers, setIdentifiers] = useState<OrganizationIdentifierResponse[]>([]);
+  const [completeness, setCompleteness] = useState<OrganizationCompletenessResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const canEdit = useCan("organizations.update");
 
   useEffect(() => {
-    Promise.all([getOrganization(id), getOrganizationIdentifiers(id)])
-      .then(([o, i]) => {
+    Promise.all([getOrganization(id), getOrganizationIdentifiers(id), getOrganizationCompleteness(id)])
+      .then(([o, i, c]) => {
         setOrg(o);
         setIdentifiers(i);
+        setCompleteness(c);
       })
       .catch((e) => setError(e instanceof ApiError ? e.detail : "Ошибка загрузки"))
       .finally(() => setLoading(false));
@@ -79,6 +81,18 @@ export default function OrganizationWorkspacePage() {
             </p>
           </div>
         </div>
+        {completeness && (
+          <Badge
+            variant={completeness.status === "complete" ? "default" : "destructive"}
+            className="ml-2"
+          >
+            {completeness.status === "complete" ? (
+              <><CheckCircle2 className="mr-1 h-3 w-3" />Полные реквизиты</>
+            ) : (
+              <><AlertTriangle className="mr-1 h-3 w-3" />Неполные реквизиты</>
+            )}
+          </Badge>
+        )}
         <div className="ml-auto flex gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href={`/organizations/${id}/documents`}>
@@ -180,6 +194,14 @@ export default function OrganizationWorkspacePage() {
                 <div className="mt-4">
                   <dt className="text-xs text-muted-foreground">Примечание</dt>
                   <dd className="text-sm">{org.comment}</dd>
+                </div>
+              )}
+              {org.bank_details && (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground flex items-center gap-1">
+                    <Landmark className="h-3 w-3" />Банковские реквизиты
+                  </p>
+                  <pre className="rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">{org.bank_details}</pre>
                 </div>
               )}
             </CardContent>

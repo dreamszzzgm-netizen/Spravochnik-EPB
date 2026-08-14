@@ -109,14 +109,12 @@ def validate_parent_for_organization(
         target_type = current_type
 
     if target_type is OrganizationType.BRANCH:
-        if parent_id is None and not is_update:
+        if parent_id is None:
             raise OrganizationValidationError(
                 "Для филиала обязательно указание головной организации"
             )
-        if is_update and parent_id is None and current_parent_id is not None:
-            pass  # Allow clearing parent only via explicit type change
         if parent_id is not None:
-            parent = get_organization(db, parent_id)
+            parent = get_organization(db, parent_id, include_deleted=True)
             if parent is None:
                 raise OrganizationNotFoundError("Головная организация не найдена")
             if parent.deleted_at is not None:
@@ -126,10 +124,6 @@ def validate_parent_for_organization(
             if organization_id is not None and parent.id == organization_id:
                 raise OrganizationValidationError(
                     "Организация не может быть филиалом самой себя"
-                )
-            if parent.organization_type is OrganizationType.BRANCH:
-                raise OrganizationValidationError(
-                    "Головная организация не может быть филиалом"
                 )
     else:
         if parent_id is not None:
@@ -228,7 +222,21 @@ class OrganizationService:
                 )
                 db.add(ident)
         for ident in existing.values():
-            self.remove_identifier(db, actor_id=actor_id, identifier=ident)
+            org_id = ident.organization_id
+            db.delete(ident)
+            write_audit(
+                db,
+                action="organization.identifier_removed",
+                summary="Organization identifier removed",
+                result="success",
+                user_id=actor_id,
+                entity_type="organization",
+                entity_id=org_id,
+                metadata={
+                    "identifier_id": str(ident.id),
+                    "identifier_type": ident.identifier_type.value,
+                },
+            )
 
     def create_organization(
         self,

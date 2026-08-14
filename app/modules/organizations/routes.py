@@ -12,6 +12,7 @@ from app.modules.identity.authorization import (
     can_reference_organizations,
 )
 from app.modules.identity.dependencies import require_scoped_permission
+from app.modules.organizations.enums import OrganizationType
 from app.modules.organizations.importer import (
     InvalidImportFileError,
     LocalOcrUnavailableError,
@@ -221,6 +222,54 @@ def create_organization(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get(
+    "/search",
+    response_model=list[OrganizationParentSearchResult],
+)
+def search_organizations_for_parent(
+    q: str = "",
+    page: int = 1,
+    page_size: int = 20,
+    authorization: AuthorizationContext = _dep_view,
+    db: Session = Depends(get_db),
+):
+    from sqlalchemy import or_, select
+
+    from app.modules.organizations.enums import OrganizationType
+    from app.modules.organizations.models import Organization as OrgModel
+
+    stmt = select(OrgModel).where(OrgModel.deleted_at.is_(None))
+    stmt = stmt.where(
+        OrgModel.organization_type.in_([
+            OrganizationType.LEGAL_ENTITY,
+            OrganizationType.INDIVIDUAL_ENTREPRENEUR,
+        ])
+    )
+    if q:
+        pattern = f"%{q}%"
+        stmt = stmt.where(
+            or_(
+                OrgModel.legal_name.ilike(pattern),
+                OrgModel.short_name.ilike(pattern),
+            )
+        )
+    offset = max(0, page - 1) * page_size
+    items = list(
+        db.scalars(
+            stmt.order_by(OrgModel.legal_name.asc()).offset(offset).limit(page_size)
+        )
+    )
+    return [
+        OrganizationParentSearchResult(
+            id=o.id,
+            legal_name=o.legal_name,
+            short_name=o.short_name,
+            organization_type=o.organization_type.value,
+        )
+        for o in items
+    ]
+
+
 @router.get("/{organization_id}", response_model=OrganizationResponse)
 def read_organization(
     organization_id: uuid.UUID,
@@ -243,6 +292,13 @@ def update_organization(
         if "parent_id" in payload.model_fields_set
         else organization.parent_id
     )
+    # When changing type to non-branch, clear parent_id automatically
+    if (
+        "organization_type" in payload.model_fields_set
+        and payload.organization_type is not None
+        and payload.organization_type != OrganizationType.BRANCH
+    ):
+        parent_id = None
     if (
         "parent_id" in payload.model_fields_set
         and payload.parent_id is not None
@@ -510,51 +566,3 @@ def read_organization_completeness(
         ],
         warning_fields=[],
     )
-
-
-@router.get(
-    "/search",
-    response_model=list[OrganizationParentSearchResult],
-)
-def search_organizations_for_parent(
-    q: str = "",
-    page: int = 1,
-    page_size: int = 20,
-    authorization: AuthorizationContext = _dep_view,
-    db: Session = Depends(get_db),
-):
-    from sqlalchemy import or_, select
-
-    from app.modules.organizations.enums import OrganizationType
-    from app.modules.organizations.models import Organization as OrgModel
-
-    stmt = select(OrgModel).where(OrgModel.deleted_at.is_(None))
-    stmt = stmt.where(
-        OrgModel.organization_type.in_([
-            OrganizationType.LEGAL_ENTITY,
-            OrganizationType.INDIVIDUAL_ENTREPRENEUR,
-        ])
-    )
-    if q:
-        pattern = f"%{q}%"
-        stmt = stmt.where(
-            or_(
-                OrgModel.legal_name.ilike(pattern),
-                OrgModel.short_name.ilike(pattern),
-            )
-        )
-    offset = max(0, page - 1) * page_size
-    items = list(
-        db.scalars(
-            stmt.order_by(OrgModel.legal_name.asc()).offset(offset).limit(page_size)
-        )
-    )
-    return [
-        OrganizationParentSearchResult(
-            id=o.id,
-            legal_name=o.legal_name,
-            short_name=o.short_name,
-            organization_type=o.organization_type.value,
-        )
-        for o in items
-    ]
