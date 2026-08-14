@@ -42,6 +42,5 @@ jobs:
       - run: ruff check app tests --output-format=github
       - run: alembic upgrade head
       - run: >-
-          pytest --confcutdir=tests/unit
-          tests/unit/test_storage.py
-          tests/unit/test_document_upload_policy.py -q
+          pytest --confcutdir=tests/integration
+          tests/integration/test_universal_document_repository.py -q
