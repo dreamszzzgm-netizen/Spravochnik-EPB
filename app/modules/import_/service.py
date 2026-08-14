@@ -2,14 +2,14 @@
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.identity.audit import write_audit
 from app.modules.import_.enums import CandidateAction, CandidateStatus, ImportSessionStatus
 from app.modules.import_.models import ImportCandidate, ImportSession
 from app.modules.organizations.enums import IdentifierType, OrganizationType
-from app.modules.organizations.models import Organization
+from app.modules.organizations.models import Organization, OrganizationIdentifier
 from app.modules.organizations.repository import find_identifier_by_type_and_value
 from app.modules.organizations.service import (
     OrganizationLegalFormError,
@@ -137,6 +137,47 @@ def validate_candidate(data: dict) -> list[str]:
     return errors
 
 
+def _count_organizations_by_inn(db: Session, inn: str) -> int:
+    """Count how many active organizations have the given INN."""
+    stmt = select(func.count()).select_from(
+        select(OrganizationIdentifier.organization_id)
+        .join(Organization, Organization.id == OrganizationIdentifier.organization_id)
+        .where(
+            OrganizationIdentifier.identifier_type == IdentifierType.INN,
+            OrganizationIdentifier.identifier_value == inn,
+            Organization.deleted_at.is_(None),
+        )
+        .distinct()
+        .subquery()
+    )
+    return db.scalar(stmt) or 0
+
+
+def _find_org_by_inn_and_kpp(db: Session, inn: str, kpp: str) -> Organization | None:
+    """Find organization that has both the given INN and KPP."""
+    stmt = select(OrganizationIdentifier.organization_id).where(
+        OrganizationIdentifier.identifier_type == IdentifierType.INN,
+        OrganizationIdentifier.identifier_value == inn,
+    )
+    inn_org_ids = set(db.scalars(stmt).all())
+
+    stmt = select(OrganizationIdentifier.organization_id).where(
+        OrganizationIdentifier.identifier_type == IdentifierType.KPP,
+        OrganizationIdentifier.identifier_value == kpp,
+    )
+    kpp_org_ids = set(db.scalars(stmt).all())
+
+    matching_org_ids = inn_org_ids & kpp_org_ids
+    if not matching_org_ids:
+        return None
+
+    org_id = matching_org_ids.pop()
+    org = db.get(Organization, org_id)
+    if org and org.deleted_at is None:
+        return org
+    return None
+
+
 def match_organization(
     db: Session,
     data: dict,
@@ -145,8 +186,9 @@ def match_organization(
 
     Returns (organization, match_type) where match_type is:
     - "exact_ogrnip": OGRNIP match (IP only)
-    - "exact_inn": INN match (LE/BRANCH)
-    - "exact_inn_kpp": INN+KPP match (LE/BRANCH)
+    - "exact_inn_kpp": INN+KPP match (LE/BRANCH) - deterministic UPDATE
+    - "exact_inn": INN match (LE/BRANCH) - single org with this INN - deterministic UPDATE
+    - "ambiguous_inn": multiple orgs share this INN - POTENTIAL_DUPLICATE
     - "name_match": name-only match (potential duplicate)
     - "": no match
     """
@@ -173,27 +215,45 @@ def match_organization(
                 if org and org.deleted_at is None:
                     return org, "exact_inn"
 
-    elif org_type == OrganizationType.BRANCH or org_type == OrganizationType.LEGAL_ENTITY:
+    elif org_type == OrganizationType.BRANCH:
+        # BRANCH: requires INN+KPP for deterministic match
         if inn and kpp:
-            inn_id = find_identifier_by_type_and_value(
-                db, identifier_type=IdentifierType.INN, identifier_value=inn
-            )
-            if inn_id:
-                kpp_id = find_identifier_by_type_and_value(
-                    db, identifier_type=IdentifierType.KPP, identifier_value=kpp
-                )
-                if kpp_id and inn_id.organization_id == kpp_id.organization_id:
-                    org = db.get(Organization, inn_id.organization_id)
-                    if org and org.deleted_at is None:
-                        return org, "exact_inn_kpp"
+            org = _find_org_by_inn_and_kpp(db, inn, kpp)
+            if org:
+                return org, "exact_inn_kpp"
+        # INN-only or KPP mismatch -> never auto-match
         if inn:
+            # Check if multiple orgs have this INN
+            count = _count_organizations_by_inn(db, inn)
+            if count > 1:
+                return None, "ambiguous_inn"
+            # Single org with this INN - but no KPP match
             existing_id = find_identifier_by_type_and_value(
                 db, identifier_type=IdentifierType.INN, identifier_value=inn
             )
             if existing_id:
                 org = db.get(Organization, existing_id.organization_id)
                 if org and org.deleted_at is None:
-                    return org, "exact_inn"
+                    return org, "ambiguous_inn"
+
+    elif org_type == OrganizationType.LEGAL_ENTITY:
+        # LEGAL_ENTITY: prefers INN+KPP, falls back to INN only if unambiguous
+        if inn and kpp:
+            org = _find_org_by_inn_and_kpp(db, inn, kpp)
+            if org:
+                return org, "exact_inn_kpp"
+        if inn:
+            count = _count_organizations_by_inn(db, inn)
+            if count > 1:
+                return None, "ambiguous_inn"
+            if count == 1:
+                existing_id = find_identifier_by_type_and_value(
+                    db, identifier_type=IdentifierType.INN, identifier_value=inn
+                )
+                if existing_id:
+                    org = db.get(Organization, existing_id.organization_id)
+                    if org and org.deleted_at is None:
+                        return org, "exact_inn"
 
     legal_name = data.get("legal_name")
     if legal_name:
@@ -216,6 +276,7 @@ def _determine_status_and_action(
     """Determine candidate status and proposed action.
 
     Deterministic matches (exact_inn, exact_inn_kpp, exact_ogrnip) → UPDATE.
+    Ambiguous INN (multiple orgs or KPP mismatch) → POTENTIAL_DUPLICATE.
     Name-only match → POTENTIAL_DUPLICATE (user decides).
     No match → CREATE.
     Errors → ERROR.
@@ -226,6 +287,9 @@ def _determine_status_and_action(
     if match_org:
         if match_type in ("exact_inn", "exact_inn_kpp", "exact_ogrnip"):
             return CandidateStatus.UPDATE, CandidateAction.UPDATE
+        return CandidateStatus.POTENTIAL_DUPLICATE, CandidateAction.SKIP
+
+    if match_type in ("ambiguous_inn", "name_match"):
         return CandidateStatus.POTENTIAL_DUPLICATE, CandidateAction.SKIP
 
     return CandidateStatus.NEW, CandidateAction.CREATE
