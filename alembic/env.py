@@ -8,6 +8,7 @@ from app.database import models  # noqa: F401
 from app.database.base import Base
 from app.modules.comments import models as comment_models  # noqa: F401
 from app.modules.contracts import models as contract_models  # noqa: F401
+from app.modules.documents import models as document_models  # noqa: F401
 from app.modules.expertises import models as expertise_models  # noqa: F401
 from app.modules.identity import models as identity_models  # noqa: F401
 from app.modules.import_ import models as import_models  # noqa: F401
