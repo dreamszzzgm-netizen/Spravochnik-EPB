@@ -39,6 +39,13 @@ jobs:
 
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
-      - run: ruff check app tests --output-format=github
+      - run: ruff check app tests
+      - name: Verify single Alembic head
+        shell: bash
+        run: |
+          heads=$(alembic heads)
+          echo "$heads"
+          test "$(printf '%s\n' "$heads" | wc -l)" -eq 1
+          printf '%s\n' "$heads" | grep -q '^0021_universal_documents '
       - run: alembic upgrade head
-      - run: pytest tests/integration/test_documents_acceptance.py -q
+      - run: pytest
