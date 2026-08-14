@@ -1,5 +1,5 @@
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import BinaryIO, Protocol
 
 from sqlalchemy.exc import IntegrityError
@@ -21,6 +21,7 @@ from app.modules.identity.authorization import AuthorizationContext
 from app.storage.local import LocalFileStorage
 
 DOCUMENT_MAX_BYTES = 20 * 1024 * 1024
+_METADATA_UNSET = object()
 
 
 class DocumentVersionConflictError(RuntimeError):
@@ -245,6 +246,142 @@ class DocumentService:
             metadata={"target_type": target_name.removesuffix("_id")},
         )
         db.commit()
+
+    def update_metadata(
+        self,
+        db: Session,
+        *,
+        actor_user_id: uuid.UUID,
+        document: Document,
+        expected_version: int,
+        title: str | None = None,
+        document_type: str | None = None,
+        status: DocumentLifecycleStatus | str | None = None,
+        issued_at: date | None | object = _METADATA_UNSET,
+        expires_at: date | None | object = _METADATA_UNSET,
+    ) -> Document:
+        locked = repository.get_document_for_update(db, document.id)
+        if locked is None:
+            db.rollback()
+            raise DocumentNotFoundError("document not found")
+        if locked.version != expected_version:
+            db.rollback()
+            raise DocumentVersionConflictError(
+                f"document version conflict: expected {expected_version}, current {locked.version}"
+            )
+
+        changed_fields: list[str] = []
+        if title is not None:
+            normalized_title = title.strip()
+            if not normalized_title:
+                db.rollback()
+                raise ValueError("document title must not be empty")
+            locked.title = normalized_title
+            changed_fields.append("title")
+        if document_type is not None:
+            normalized_type = document_type.strip()
+            if not normalized_type:
+                db.rollback()
+                raise ValueError("document type must not be empty")
+            locked.document_type = normalized_type
+            changed_fields.append("document_type")
+        if status is not None:
+            locked.status = DocumentLifecycleStatus(status).value
+            changed_fields.append("status")
+        if issued_at is not _METADATA_UNSET:
+            locked.issued_at = issued_at  # type: ignore[assignment]
+            changed_fields.append("issued_at")
+        if expires_at is not _METADATA_UNSET:
+            locked.expires_at = expires_at  # type: ignore[assignment]
+            changed_fields.append("expires_at")
+
+        if not changed_fields:
+            db.rollback()
+            raise ValueError("no document metadata fields supplied")
+
+        locked.version += 1
+        write_audit(
+            db,
+            action="document.metadata_updated",
+            summary="Document metadata updated",
+            result="success",
+            user_id=actor_user_id,
+            entity_type="document",
+            entity_id=locked.id,
+            metadata={"fields": sorted(changed_fields)},
+        )
+        db.commit()
+        return locked
+
+    def soft_delete_document(
+        self,
+        db: Session,
+        *,
+        actor_user_id: uuid.UUID,
+        document: Document,
+        expected_version: int | None = None,
+    ) -> Document:
+        locked = repository.get_document_for_update(db, document.id)
+        if locked is None:
+            db.rollback()
+            raise DocumentNotFoundError("document not found")
+        if expected_version is not None and locked.version != expected_version:
+            db.rollback()
+            raise DocumentVersionConflictError(
+                f"document version conflict: expected {expected_version}, current {locked.version}"
+            )
+
+        locked.deleted_at = datetime.now(UTC)
+        locked.deleted_by = actor_user_id
+        locked.version += 1
+        write_audit(
+            db,
+            action="document.deleted",
+            summary="Document soft-deleted",
+            result="success",
+            user_id=actor_user_id,
+            entity_type="document",
+            entity_id=locked.id,
+        )
+        db.commit()
+        return locked
+
+    def restore_document(
+        self,
+        db: Session,
+        *,
+        actor_user_id: uuid.UUID,
+        document: Document,
+        expected_version: int,
+    ) -> Document:
+        locked = repository.get_document_for_update(
+            db,
+            document.id,
+            include_deleted=True,
+        )
+        if locked is None or locked.deleted_at is None:
+            db.rollback()
+            raise DocumentNotFoundError("deleted document not found")
+        if locked.version != expected_version:
+            db.rollback()
+            raise DocumentVersionConflictError(
+                f"document version conflict: expected {expected_version}, current {locked.version}"
+            )
+
+        locked.deleted_at = None
+        locked.deleted_by = None
+        locked.version += 1
+        write_audit(
+            db,
+            action="document.restored",
+            summary="Document restored",
+            result="success",
+            user_id=actor_user_id,
+            entity_type="document",
+            entity_id=locked.id,
+        )
+        db.commit()
+        return locked
 
     def open_document(self, stored_object: StoredObjectLike) -> BinaryIO:
         return self.storage.open(stored_object.storage_key)
