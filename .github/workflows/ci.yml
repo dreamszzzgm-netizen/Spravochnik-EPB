@@ -48,4 +48,17 @@ jobs:
           test "$(printf '%s\n' "$heads" | wc -l)" -eq 1
           printf '%s\n' "$heads" | grep -q '^0021_universal_documents '
       - run: alembic upgrade head
-      - run: pytest
+      - name: Run full pytest to first failure
+        shell: bash
+        run: |
+          set +e
+          pytest -x --tb=short 2>&1 | tee /tmp/pytest.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            message=$(tail -n 100 /tmp/pytest.log)
+            message=${message//'%'/'%25'}
+            message=${message//$'\r'/'%0D'}
+            message=${message//$'\n'/'%0A'}
+            echo "::error title=Full pytest first failure::$message"
+          fi
+          exit "$status"
