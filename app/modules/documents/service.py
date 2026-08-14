@@ -2,15 +2,22 @@ import uuid
 from datetime import date
 from typing import BinaryIO, Protocol
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.modules.documents import repository
+from app.modules.documents.access import (
+    DocumentAccessService,
+    DocumentTargetNotFoundError,
+    target_from_link,
+)
 from app.modules.documents.enums import DocumentLifecycleStatus
 from app.modules.documents.models import Document, DocumentLink, DocumentVersion
 from app.modules.documents.policy import validate_document_upload
 from app.modules.documents.targets import DocumentTarget
 from app.modules.identity.audit import write_audit
+from app.modules.identity.authorization import AuthorizationContext
 from app.storage.local import LocalFileStorage
 
 DOCUMENT_MAX_BYTES = 20 * 1024 * 1024
@@ -24,6 +31,10 @@ class DocumentNotFoundError(RuntimeError):
     pass
 
 
+class DocumentLinkConflictError(RuntimeError):
+    pass
+
+
 class StoredObjectLike(Protocol):
     storage_key: str
 
@@ -31,6 +42,7 @@ class StoredObjectLike(Protocol):
 class DocumentService:
     def __init__(self, storage: LocalFileStorage | None = None) -> None:
         self.storage = storage or LocalFileStorage(get_settings().storage_root)
+        self.access = DocumentAccessService()
 
     def create_document(
         self,
@@ -146,6 +158,93 @@ class DocumentService:
             self.storage.delete(stored.storage_key)
             raise
         return version
+
+    def add_link(
+        self,
+        db: Session,
+        *,
+        actor_user_id: uuid.UUID,
+        authorization: AuthorizationContext,
+        document: Document,
+        target: DocumentTarget,
+    ) -> DocumentLink:
+        locked = repository.get_document_for_update(db, document.id)
+        if locked is None or not self.access.can_access_document(
+            db,
+            authorization=authorization,
+            document_id=document.id,
+        ):
+            db.rollback()
+            raise DocumentNotFoundError("document not found")
+        self.access.require_accessible_target(
+            db,
+            authorization=authorization,
+            target=target,
+        )
+        if repository.find_document_link_for_target(db, locked.id, target) is not None:
+            db.rollback()
+            raise DocumentLinkConflictError("document link already exists")
+
+        target_name, _target_id = target.non_null_items()[0]
+        link = DocumentLink(document_id=locked.id, **target.as_link_kwargs())
+        db.add(link)
+        try:
+            db.flush()
+            write_audit(
+                db,
+                action="document.link_added",
+                summary="Document link added",
+                result="success",
+                user_id=actor_user_id,
+                entity_type="document",
+                entity_id=locked.id,
+                metadata={"target_type": target_name.removesuffix("_id")},
+            )
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise DocumentLinkConflictError("document link already exists") from exc
+        return link
+
+    def remove_link(
+        self,
+        db: Session,
+        *,
+        actor_user_id: uuid.UUID,
+        authorization: AuthorizationContext,
+        document: Document,
+        link_id: uuid.UUID,
+    ) -> None:
+        locked = repository.get_document_for_update(db, document.id)
+        if locked is None or not self.access.can_access_document(
+            db,
+            authorization=authorization,
+            document_id=document.id,
+        ):
+            db.rollback()
+            raise DocumentNotFoundError("document not found")
+        link = repository.get_document_link(db, locked.id, link_id)
+        if link is None or not self.access.can_access_target(
+            db,
+            authorization=authorization,
+            target=target_from_link(link),
+        ):
+            db.rollback()
+            raise DocumentTargetNotFoundError("document link not found")
+
+        target_name, _target_id = target_from_link(link).non_null_items()[0]
+        db.delete(link)
+        write_audit(
+            db,
+            action="document.link_removed",
+            summary="Document link removed",
+            result="success",
+            user_id=actor_user_id,
+            entity_type="document",
+            entity_id=locked.id,
+            metadata={"target_type": target_name.removesuffix("_id")},
+        )
+        db.commit()
 
     def open_document(self, stored_object: StoredObjectLike) -> BinaryIO:
         return self.storage.open(stored_object.storage_key)
