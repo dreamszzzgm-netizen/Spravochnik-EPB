@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect
+
+from alembic import command
 
 
 def _alembic_config(url: str) -> Config:
