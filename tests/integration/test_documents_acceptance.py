@@ -4,7 +4,13 @@ from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
-from app.modules.documents.models import DocumentRequirement, OrganizationDocument
+from app.modules.documents import repository
+from app.modules.documents.models import (
+    Document,
+    DocumentLink,
+    DocumentRequirement,
+    DocumentVersion,
+)
 from app.modules.opo.enums import HazardClass
 from app.modules.opo.models import OPO
 from app.modules.organizations.enums import OrganizationType
@@ -20,6 +26,37 @@ def _login(client, credentials: dict[str, object]) -> None:
         },
     )
     assert response.status_code == 200
+
+
+def _add_universal_document(
+    db: Session,
+    *,
+    organization_id,
+    document_type: str,
+    title: str,
+    expires_at: date | None = None,
+) -> Document:
+    document = Document(
+        document_type=document_type,
+        title=title,
+        expires_at=expires_at,
+    )
+    db.add(document)
+    db.flush()
+    version = DocumentVersion(
+        document_id=document.id,
+        version_number=1,
+        original_filename=f"{document.id}.pdf",
+        content_type="application/pdf",
+        storage_key=f"{uuid.uuid4().hex}.pdf",
+        sha256="0" * 64,
+        size_bytes=1,
+    )
+    link = DocumentLink(document_id=document.id, organization_id=organization_id)
+    db.add_all([version, link])
+    db.flush()
+    document.current_version_id = version.id
+    return document
 
 
 def test_requirement_and_document_file_lifecycle(
@@ -46,7 +83,7 @@ def test_requirement_and_document_file_lifecycle(
     )
     assert requirement_response.status_code == 201
 
-    content = b"document acceptance bytes\x00\xff"
+    content = b"%PDF-1.7\nacceptance-document\n"
     upload_response = client.post(
         f"/api/organizations/{organization.id}/documents",
         data={
@@ -54,13 +91,13 @@ def test_requirement_and_document_file_lifecycle(
             "title": "Insurance 2026",
             "expires_at": "2026-08-20",
         },
-        files={"file": ("insurance.bin", content, "application/octet-stream")},
+        files={"file": ("insurance.pdf", content, "application/pdf")},
     )
     assert upload_response.status_code == 201, upload_response.text
     uploaded = upload_response.json()
     assert uploaded["sha256"] == hashlib.sha256(content).hexdigest()
     assert uploaded["size_bytes"] == len(content)
-    assert uploaded["original_filename"] == "insurance.bin"
+    assert uploaded["original_filename"] == "insurance.pdf"
     assert uploaded["status"] in {"expired", "expiring_14", "expiring_40", "valid"}
 
     download_response = client.get(
@@ -77,9 +114,15 @@ def test_requirement_and_document_file_lifecycle(
     assert list_response.status_code == 200
     assert list_response.json() == {"source_available": True, "items": []}
 
-    document = db_session.get(OrganizationDocument, uploaded["id"])
+    document = repository.get_document(
+        db_session,
+        uuid.UUID(uploaded["id"]),
+        include_deleted=True,
+    )
     assert document is not None
     assert document.deleted_at is not None
+    assert document.deleted_by == uuid.UUID(superuser["id"])
+    assert repository.get_current_version(db_session, document.id) is not None
 
 
 def test_requirement_endpoints_are_superuser_only(client, test_user: dict[str, object]) -> None:
@@ -134,30 +177,18 @@ def test_management_report_uses_applicable_requirements_and_real_statuses(
     )
     db_session.flush()
     today = date.today()
-    db_session.add_all(
-        [
-            OrganizationDocument(
-                organization_id=without_opo.id,
-                document_type="company_card",
-                title="Valid company card",
-                original_filename="valid.bin",
-                content_type="application/octet-stream",
-                storage_key=f"{uuid.uuid4().hex}.bin",
-                sha256="0" * 64,
-                size_bytes=1,
-            ),
-            OrganizationDocument(
-                organization_id=with_opo.id,
-                document_type="company_card",
-                title="Expiring company card",
-                original_filename="expiring.bin",
-                content_type="application/octet-stream",
-                storage_key=f"{uuid.uuid4().hex}.bin",
-                sha256="1" * 64,
-                size_bytes=1,
-                expires_at=today + timedelta(days=7),
-            ),
-        ]
+    _add_universal_document(
+        db_session,
+        organization_id=without_opo.id,
+        document_type="company_card",
+        title="Valid company card",
+    )
+    _add_universal_document(
+        db_session,
+        organization_id=with_opo.id,
+        document_type="company_card",
+        title="Expiring company card",
+        expires_at=today + timedelta(days=7),
     )
     db_session.commit()
 
