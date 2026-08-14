@@ -1,11 +1,10 @@
 import uuid
 
-import sqlalchemy as sa
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.buildings.models import Building
 from app.modules.contracts import repository as contracts_repository
-from app.modules.contracts.models import Contract, ContractItem
 from app.modules.documents import repository
 from app.modules.documents.models import DocumentLink
 from app.modules.documents.targets import DocumentTarget
@@ -21,14 +20,6 @@ from app.modules.identity.authorization import (
 from app.modules.opo.models import OPO
 from app.modules.organizations.models import Organization
 from app.modules.tasks import repository as tasks_repository
-from app.modules.tasks.models import (
-    TaskBuilding,
-    TaskContract,
-    TaskContractItem,
-    TaskOPO,
-    TaskOrganization,
-    TaskTechnicalDevice,
-)
 from app.modules.technical_devices.models import TechnicalDevice
 
 
@@ -49,67 +40,6 @@ def target_from_link(link: DocumentLink) -> DocumentTarget:
 
 
 class DocumentAccessService:
-    def _task_related_organization_ids(
-        self,
-        db: Session,
-        task_id: uuid.UUID,
-    ) -> set[uuid.UUID]:
-        related = set(
-            db.scalars(
-                sa.select(TaskOrganization.organization_id).where(
-                    TaskOrganization.task_id == task_id
-                )
-            ).all()
-        )
-        related.update(
-            db.scalars(
-                sa.select(Contract.customer_organization_id)
-                .join(TaskContract, TaskContract.contract_id == Contract.id)
-                .where(TaskContract.task_id == task_id)
-            ).all()
-        )
-        related.update(
-            db.scalars(
-                sa.select(Contract.customer_organization_id)
-                .join(ContractItem, ContractItem.contract_id == Contract.id)
-                .join(
-                    TaskContractItem,
-                    TaskContractItem.contract_item_id == ContractItem.id,
-                )
-                .where(TaskContractItem.task_id == task_id)
-            ).all()
-        )
-        related.update(
-            value
-            for value in db.scalars(
-                sa.select(TechnicalDevice.organization_id)
-                .join(
-                    TaskTechnicalDevice,
-                    TaskTechnicalDevice.technical_device_id == TechnicalDevice.id,
-                )
-                .where(TaskTechnicalDevice.task_id == task_id)
-            ).all()
-            if value is not None
-        )
-        related.update(
-            value
-            for value in db.scalars(
-                sa.select(Building.organization_id)
-                .join(TaskBuilding, TaskBuilding.building_id == Building.id)
-                .where(TaskBuilding.task_id == task_id)
-            ).all()
-            if value is not None
-        )
-        opo_rows = db.execute(
-            sa.select(OPO.owner_organization_id, OPO.operating_organization_id)
-            .join(TaskOPO, TaskOPO.opo_id == OPO.id)
-            .where(TaskOPO.task_id == task_id)
-        ).all()
-        for owner_id, operating_id in opo_rows:
-            related.add(owner_id)
-            related.add(operating_id)
-        return related
-
     def can_access_target(
         self,
         db: Session,
@@ -121,7 +51,7 @@ class DocumentAccessService:
 
         if target_name == "organization_id":
             entity = db.scalar(
-                sa.select(Organization).where(
+                select(Organization).where(
                     Organization.id == target_id,
                     Organization.deleted_at.is_(None),
                 )
@@ -130,13 +60,13 @@ class DocumentAccessService:
 
         if target_name == "opo_id":
             entity = db.scalar(
-                sa.select(OPO).where(OPO.id == target_id, OPO.deleted_at.is_(None))
+                select(OPO).where(OPO.id == target_id, OPO.deleted_at.is_(None))
             )
             return entity is not None and can_access_opo(authorization, entity)
 
         if target_name == "technical_device_id":
             entity = db.scalar(
-                sa.select(TechnicalDevice).where(
+                select(TechnicalDevice).where(
                     TechnicalDevice.id == target_id,
                     TechnicalDevice.deleted_at.is_(None),
                 )
@@ -147,7 +77,7 @@ class DocumentAccessService:
 
         if target_name == "building_id":
             entity = db.scalar(
-                sa.select(Building).where(
+                select(Building).where(
                     Building.id == target_id,
                     Building.deleted_at.is_(None),
                 )
@@ -186,7 +116,7 @@ class DocumentAccessService:
                 assignee_employee_ids=tasks_repository.get_task_assignee_ids(
                     db, task.id
                 ),
-                related_organization_ids=self._task_related_organization_ids(
+                related_organization_ids=tasks_repository.get_task_related_organization_ids(
                     db, task.id
                 ),
             )
