@@ -9,11 +9,13 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
+from app.modules.documents import repository
 from app.modules.documents.control import (
     DocumentSnapshot,
     RequirementSnapshot,
     classify_document,
 )
+from app.modules.documents.policy import DocumentUploadPolicyError
 from app.modules.documents.repository import (
     document_tables_available,
     get_organization_document,
@@ -24,11 +26,13 @@ from app.modules.documents.schemas import (
     OrganizationDocumentListResponse,
     OrganizationDocumentResponse,
 )
-from app.modules.documents.service import DocumentService
+from app.modules.documents.service import DocumentNotFoundError, DocumentService
+from app.modules.documents.targets import DocumentTarget
 from app.modules.identity.authorization import AuthorizationContext, can_access_organization
 from app.modules.identity.dependencies import require_scoped_permission
 from app.modules.opo.models import OPO
 from app.modules.organizations.repository import get_organization
+from app.storage.local import StorageLimitExceeded
 
 router = APIRouter(
     prefix="/api/organizations/{organization_id}/documents",
@@ -40,7 +44,6 @@ _dep_view = Depends(require_scoped_permission("documents.view"))  # noqa: B008
 _dep_download = Depends(require_scoped_permission("documents.download"))  # noqa: B008
 _dep_upload = Depends(require_scoped_permission("documents.upload"))  # noqa: B008
 _dep_delete = Depends(require_scoped_permission("documents.delete"))  # noqa: B008
-_MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
 
 
 def _organization_or_404(
@@ -132,25 +135,37 @@ def upload_document(
     title = title.strip()
     if not document_type or not title:
         raise HTTPException(status_code=422, detail="Document type and title are required")
-    if file.size is not None and file.size > _MAX_DOCUMENT_BYTES:
-        raise HTTPException(status_code=413, detail="Document exceeds 20 MiB limit")
-    document = service.create_document(
-        db,
-        organization_id=organization_id,
-        document_type=document_type,
-        title=title,
-        original_filename=file.filename or "document",
-        content_type=file.content_type,
-        source=file.file,
-        issued_at=issued_at,
-        expires_at=expires_at,
-    )
-    if document.size_bytes > _MAX_DOCUMENT_BYTES:
-        service.storage.delete(document.storage_key)
-        db.delete(document)
-        db.commit()
-        raise HTTPException(status_code=413, detail="Document exceeds 20 MiB limit")
-    return _document_response(db, organization_id, document)
+
+    try:
+        document = service.create_document(
+            db,
+            actor_user_id=authorization.user_id,
+            target=DocumentTarget(organization_id=organization_id),
+            document_type=document_type,
+            title=title,
+            original_filename=file.filename or "document",
+            content_type=file.content_type,
+            source=file.file,
+            issued_at=issued_at,
+            expires_at=expires_at,
+        )
+    except DocumentUploadPolicyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except StorageLimitExceeded as exc:
+        raise HTTPException(status_code=413, detail="Document exceeds 20 MiB limit") from exc
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document storage is unavailable",
+        ) from exc
+
+    projection = get_organization_document(db, organization_id, document.id)
+    if projection is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document projection is unavailable",
+        )
+    return _document_response(db, organization_id, projection)
 
 
 @router.get("/{document_id}/download")
@@ -165,8 +180,15 @@ def download_document(
     document = get_organization_document(db, organization_id, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        stream = service.open_document(document)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Document file is unavailable",
+        ) from exc
     return StreamingResponse(
-        service.open_document(document),
+        stream,
         media_type=document.content_type or "application/octet-stream",
         headers={
             "Content-Disposition": (
@@ -185,8 +207,19 @@ def delete_document(
 ):
     _organization_or_404(db, organization_id, authorization)
     _require_document_tables(db)
-    document = get_organization_document(db, organization_id, document_id)
+    projection = get_organization_document(db, organization_id, document_id)
+    if projection is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    document = repository.get_document(db, projection.id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
-    service.soft_delete_document(db, document)
+    try:
+        service.soft_delete_document(
+            db,
+            actor_user_id=authorization.user_id,
+            document=document,
+            expected_version=None,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Document not found") from exc
     return None
