@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app.storage.local import LocalFileStorage
+from app.storage.local import LocalFileStorage, StorageLimitExceeded
 
 
 def test_put_calculates_sha256_and_preserves_bytes(tmp_path: Path) -> None:
@@ -15,6 +15,15 @@ def test_put_calculates_sha256_and_preserves_bytes(tmp_path: Path) -> None:
     assert storage.exists(info.storage_key)
     with storage.open(info.storage_key) as stored:
         assert stored.read() == b"spravoshnik"
+
+
+def test_put_rejects_stream_over_limit_without_persisting(tmp_path: Path) -> None:
+    storage = LocalFileStorage(tmp_path)
+
+    with pytest.raises(StorageLimitExceeded):
+        storage.put(BytesIO(b"123456"), max_bytes=5)
+
+    assert [path for path in tmp_path.rglob("*") if path.is_file()] == []
 
 
 @pytest.mark.parametrize("key", ["../secret", "a/b", r"a\\b", ""])
