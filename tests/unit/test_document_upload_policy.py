@@ -1,3 +1,5 @@
+# ruff: noqa: I001
+
 import pytest
 
 from app.modules.documents.policy import DocumentUploadPolicyError, validate_document_upload
