@@ -42,5 +42,5 @@ jobs:
       - run: ruff check app tests
       - run: alembic upgrade head
       - run: >-
-          pytest --confcutdir=tests/unit
-          tests/unit/test_universal_document_models.py -q
+          pytest --confcutdir=tests/integration
+          tests/integration/test_universal_documents_migration.py -q
