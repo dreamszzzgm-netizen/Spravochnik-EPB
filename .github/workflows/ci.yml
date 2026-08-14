@@ -39,9 +39,15 @@ jobs:
 
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ".[dev]"
-      - run: ruff check app tests --output-format=github
-      - run: alembic upgrade head
-      - run: >-
-          pytest --confcutdir=tests/integration
-          tests/integration/test_document_link_access.py
-          tests/integration/test_document_link_removal.py -q
+      - name: Diagnose Ruff import fix
+        shell: bash
+        run: |
+          cp app/modules/documents/access.py /tmp/access.before.py
+          ruff check app/modules/documents/access.py --fix
+          diff -u /tmp/access.before.py app/modules/documents/access.py > /tmp/access.diff || true
+          message=$(cat /tmp/access.diff)
+          message=${message//'%'/'%25'}
+          message=${message//$'\r'/'%0D'}
+          message=${message//$'\n'/'%0A'}
+          echo "::error title=Ruff access import fix::$message"
+          exit 1
