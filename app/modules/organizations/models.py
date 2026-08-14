@@ -132,7 +132,18 @@ class OrganizationIdentifier(Base):
         UniqueConstraint(
             "organization_id", "identifier_type", name="uq_org_identifier_type_per_org"
         ),
-        UniqueConstraint("identifier_type", "identifier_value", name="uq_org_identifier_value"),
+        Index(
+            "uq_org_identifier_ogrn",
+            "identifier_value",
+            unique=True,
+            postgresql_where=text("identifier_type = 'ogrn'"),
+        ),
+        Index(
+            "uq_org_identifier_ogrnip",
+            "identifier_value",
+            unique=True,
+            postgresql_where=text("identifier_type = 'ogrnip'"),
+        ),
         Index(
             "uq_organization_identifiers_primary",
             "organization_id",

@@ -524,15 +524,15 @@ def _ogrn(value: str = "1027700123456", primary: bool = False) -> dict:
 def test_create_identifier_conflict_rolls_back(
     db: Session, service: OrganizationService, actor: User
 ) -> None:
-    """A: create with conflicting identifier → error → new org does not exist."""
+    """A: create with conflicting OGRN → error → new org does not exist."""
     org1 = service.create_organization(
         db,
         actor_id=actor.id,
-        legal_name="Org With INN",
+        legal_name="Org With OGRN",
         short_name=None,
         organization_type=OrganizationType.LEGAL_ENTITY,
         parent_id=None,
-        identifiers=[_inn()],
+        identifiers=[_ogrn()],
     )
     # org1 committed; start a fresh session scope for the conflict test
     db.expire_all()
@@ -545,7 +545,7 @@ def test_create_identifier_conflict_rolls_back(
             short_name=None,
             organization_type=OrganizationType.LEGAL_ENTITY,
             parent_id=None,
-            identifiers=[_inn()],
+            identifiers=[_ogrn()],
         )
     db.rollback()
 
@@ -558,38 +558,38 @@ def test_create_identifier_conflict_rolls_back(
     ident = db.scalar(
         select(OrganizationIdentifier).where(
             OrganizationIdentifier.organization_id == org1.id,
-            OrganizationIdentifier.identifier_type == IdentifierType.INN,
+            OrganizationIdentifier.identifier_type == IdentifierType.OGRN,
         )
     )
     assert ident is not None
-    assert ident.identifier_value == "7701234567"
+    assert ident.identifier_value == "1027700123456"
 
 
 def test_update_identifier_conflict_rolls_back(
     db: Session, service: OrganizationService, actor: User
 ) -> None:
-    """B: update with conflicting identifier → error → original fields/identifiers unchanged."""
+    """B: update with conflicting OGRN → error → original fields/identifiers unchanged."""
     service.create_organization(
         db,
         actor_id=actor.id,
-        legal_name="Org1 INN",
+        legal_name="Org1 OGRN",
         short_name=None,
         organization_type=OrganizationType.LEGAL_ENTITY,
         parent_id=None,
-        identifiers=[_inn()],
+        identifiers=[_ogrn()],
     )
     org2 = service.create_organization(
         db,
         actor_id=actor.id,
-        legal_name="Org2 INN",
+        legal_name="Org2 OGRN",
         short_name="Org2",
         organization_type=OrganizationType.LEGAL_ENTITY,
         parent_id=None,
-        identifiers=[_inn("7709999999"), _kpp()],
+        identifiers=[_ogrn("1029999999999"), _kpp()],
     )
     db.expire_all()
 
-    # Try to change org2's INN to org1's INN — must fail
+    # Try to change org2's OGRN to org1's OGRN — must fail
     with pytest.raises(IntegrityError):
         service.update_organization(
             db,
@@ -599,7 +599,7 @@ def test_update_identifier_conflict_rolls_back(
             short_name=None,
             organization_type=None,
             parent_id=None,
-            identifiers=[_inn(), _kpp()],
+            identifiers=[_ogrn(), _kpp()],
         )
     db.rollback()
 
@@ -607,12 +607,12 @@ def test_update_identifier_conflict_rolls_back(
     from app.modules.organizations.repository import list_identifiers
 
     db.refresh(org2)
-    assert org2.legal_name == "Org2 INN"
+    assert org2.legal_name == "Org2 OGRN"
     assert org2.short_name == "Org2"
     idents = list_identifiers(db, org2.id)
-    inn = [i for i in idents if i.identifier_type == IdentifierType.INN]
-    assert len(inn) == 1
-    assert inn[0].identifier_value == "7709999999"
+    ogrn = [i for i in idents if i.identifier_type == IdentifierType.OGRN]
+    assert len(ogrn) == 1
+    assert ogrn[0].identifier_value == "1029999999999"
     kpp = [i for i in idents if i.identifier_type == IdentifierType.KPP]
     assert len(kpp) == 1
     assert kpp[0].identifier_value == "770101001"

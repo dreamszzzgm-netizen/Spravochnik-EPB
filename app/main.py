@@ -13,6 +13,7 @@ from app.modules.documents.requirement_routes import router as document_requirem
 from app.modules.documents.routes import router as documents_router
 from app.modules.expertises.routes import router as expertises_router
 from app.modules.identity.routes import router as identity_router
+from app.modules.import_.routes import router as import_router
 from app.modules.opo.reference_routes import router as reference_router
 from app.modules.opo.routes import router as opo_router
 from app.modules.organizations.routes import router as organizations_router
@@ -58,6 +59,7 @@ app.include_router(contracts_reference_router)
 app.include_router(tasks_router)
 app.include_router(workflows_router)
 app.include_router(expertises_router)
+app.include_router(import_router)
 app.include_router(analytics_router)
 
 

@@ -268,3 +268,68 @@ export interface OrganizationParentSearchResult {
   short_name: string | null;
   organization_type: string;
 }
+
+export type ImportSessionStatus =
+  | "uploaded"
+  | "processing"
+  | "preview_ready"
+  | "confirmed"
+  | "applying"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export type CandidateStatus =
+  | "new"
+  | "update"
+  | "potential_duplicate"
+  | "conflict"
+  | "error"
+  | "skip";
+
+export type CandidateAction = "create" | "update" | "skip" | "resolve_conflict";
+
+export interface ImportSessionResponse {
+  id: string;
+  user_id: string;
+  source: string;
+  filename: string | null;
+  import_type: string;
+  status: ImportSessionStatus;
+  candidate_count: number;
+  added_count: number;
+  updated_count: number;
+  skipped_count: number;
+  duplicate_count: number;
+  conflict_count: number;
+  error_count: number;
+  result_summary: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImportCandidateResponse {
+  id: string;
+  session_id: string;
+  row_number: number;
+  raw_data: Record<string, unknown> | null;
+  normalized_data: Record<string, unknown> | null;
+  validation_errors: string[] | null;
+  warnings: string[] | null;
+  candidate_status: CandidateStatus;
+  proposed_action: CandidateAction;
+  matched_organization_id: string | null;
+  conflict_details: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImportSessionListResponse {
+  items: ImportSessionResponse[];
+  total: number;
+}
+
+export interface ImportReportResponse {
+  session: ImportSessionResponse;
+  candidates: ImportCandidateResponse[];
+}

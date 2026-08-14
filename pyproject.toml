@@ -21,6 +21,7 @@ dependencies = [
   "pypdfium2>=4.30,<5",
   "pillow>=10,<13",
   "pytesseract>=0.3.13,<0.4",
+  "openpyxl>=3.1,<4",
 ]
 
 [project.optional-dependencies]
