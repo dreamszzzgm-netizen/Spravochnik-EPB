@@ -43,4 +43,4 @@ jobs:
       - run: alembic upgrade head
       - run: >-
           pytest --confcutdir=tests/integration
-          tests/integration/test_document_metadata_lifecycle.py -q
+          tests/integration/test_organization_documents_compatibility.py -q
