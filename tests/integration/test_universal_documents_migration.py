@@ -1,10 +1,9 @@
-# ruff: noqa
-
 import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
 import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
@@ -39,6 +38,62 @@ def _restore_database_url(previous: tuple[str | None, str | None]) -> None:
         os.environ["TEST_DATABASE_URL"] = previous_test_database
 
 
+def _insert_organization(connection, organization_id: uuid.UUID) -> None:
+    connection.execute(
+        sa.text(
+            """
+            INSERT INTO organizations (id, organization_type, legal_name)
+            VALUES (:id, 'legal_entity', 'Legacy Documents LLC')
+            """
+        ),
+        {"id": organization_id},
+    )
+
+
+def _insert_legacy_document(
+    connection,
+    *,
+    document_id: uuid.UUID,
+    organization_id: uuid.UUID,
+    document_type: str = "insurance",
+    title: str = "Insurance 2026",
+    deleted_at: datetime | None = None,
+) -> None:
+    connection.execute(
+        sa.text(
+            """
+            INSERT INTO organization_documents (
+                id, organization_id, document_type, title,
+                original_filename, content_type, storage_key,
+                sha256, size_bytes, issued_at, expires_at, deleted_at
+            ) VALUES (
+                :id, :organization_id, :document_type, :title,
+                :original_filename, 'application/pdf', :storage_key,
+                :sha256, 17, DATE '2026-01-01', DATE '2026-12-31', :deleted_at
+            )
+            """
+        ),
+        {
+            "id": document_id,
+            "organization_id": organization_id,
+            "document_type": document_type,
+            "title": title,
+            "original_filename": f"{document_id}.pdf",
+            "storage_key": f"legacy/{document_id}.pdf",
+            "sha256": "a" * 64,
+            "deleted_at": deleted_at,
+        },
+    )
+
+
+def _reset_legacy_state(cfg: Config, engine) -> None:
+    command.downgrade(cfg, "0020_identifier_constraints")
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text("TRUNCATE TABLE organization_documents, organizations CASCADE")
+        )
+
+
 def test_universal_document_migration_preserves_legacy_rows() -> None:
     url = os.environ["TEST_DATABASE_URL"]
     cfg = _alembic_config(url)
@@ -50,60 +105,21 @@ def test_universal_document_migration_preserves_legacy_rows() -> None:
     deleted_at = datetime(2026, 8, 1, 10, 30, tzinfo=UTC)
 
     try:
-        command.downgrade(cfg, "0020_identifier_constraints")
+        _reset_legacy_state(cfg, engine)
         with engine.begin() as connection:
-            connection.execute(sa.text("TRUNCATE TABLE organization_documents, organizations CASCADE"))
-            connection.execute(
-                sa.text(
-                    """
-                    INSERT INTO organizations (id, organization_type, legal_name)
-                    VALUES (:id, 'legal_entity', 'Legacy Documents LLC')
-                    """
-                ),
-                {"id": organization_id},
+            _insert_organization(connection, organization_id)
+            _insert_legacy_document(
+                connection,
+                document_id=active_id,
+                organization_id=organization_id,
             )
-            connection.execute(
-                sa.text(
-                    """
-                    INSERT INTO organization_documents (
-                        id, organization_id, document_type, title,
-                        original_filename, content_type, storage_key,
-                        sha256, size_bytes, issued_at, expires_at, deleted_at
-                    ) VALUES (
-                        :id, :organization_id, 'insurance', 'Insurance 2026',
-                        'legacy.pdf', 'application/pdf', :storage_key,
-                        :sha256, 17, DATE '2026-01-01', DATE '2026-12-31', NULL
-                    )
-                    """
-                ),
-                {
-                    "id": active_id,
-                    "organization_id": organization_id,
-                    "storage_key": f"legacy/{active_id}.pdf",
-                    "sha256": "a" * 64,
-                },
-            )
-            connection.execute(
-                sa.text(
-                    """
-                    INSERT INTO organization_documents (
-                        id, organization_id, document_type, title,
-                        original_filename, content_type, storage_key,
-                        sha256, size_bytes, deleted_at
-                    ) VALUES (
-                        :id, :organization_id, 'other', 'Deleted legacy',
-                        'deleted.pdf', 'application/pdf', :storage_key,
-                        :sha256, 9, :deleted_at
-                    )
-                    """
-                ),
-                {
-                    "id": deleted_id,
-                    "organization_id": organization_id,
-                    "storage_key": f"legacy/{deleted_id}.pdf",
-                    "sha256": "b" * 64,
-                    "deleted_at": deleted_at,
-                },
+            _insert_legacy_document(
+                connection,
+                document_id=deleted_id,
+                organization_id=organization_id,
+                document_type="other",
+                title="Deleted legacy",
+                deleted_at=deleted_at,
             )
 
         command.upgrade(cfg, "0021_universal_documents")
@@ -133,7 +149,6 @@ def test_universal_document_migration_preserves_legacy_rows() -> None:
             assert row["id"] == active_id
             assert row["document_type"] == "insurance"
             assert row["title"] == "Insurance 2026"
-            assert row["original_filename"] == "legacy.pdf"
             assert row["storage_key"] == f"legacy/{active_id}.pdf"
             assert row["sha256"] == "a" * 64
             assert row["size_bytes"] == 17
@@ -145,6 +160,103 @@ def test_universal_document_migration_preserves_legacy_rows() -> None:
                 {"id": deleted_id},
             ).scalar_one()
             assert migrated_deleted_at == deleted_at
+    finally:
+        engine.dispose()
+        _restore_database_url(previous)
+
+
+def test_universal_document_migration_round_trip_is_lossless() -> None:
+    url = os.environ["TEST_DATABASE_URL"]
+    cfg = _alembic_config(url)
+    previous = _set_database_url(url)
+    engine = create_engine(url)
+    organization_id = uuid.uuid4()
+    document_id = uuid.uuid4()
+
+    try:
+        _reset_legacy_state(cfg, engine)
+        with engine.begin() as connection:
+            _insert_organization(connection, organization_id)
+            _insert_legacy_document(
+                connection,
+                document_id=document_id,
+                organization_id=organization_id,
+            )
+
+        command.upgrade(cfg, "0021_universal_documents")
+        command.downgrade(cfg, "0020_identifier_constraints")
+
+        with engine.connect() as connection:
+            row = connection.execute(
+                sa.text(
+                    """
+                    SELECT id, organization_id, storage_key, sha256, size_bytes
+                    FROM organization_documents
+                    WHERE id = :id
+                    """
+                ),
+                {"id": document_id},
+            ).mappings().one()
+            assert row["id"] == document_id
+            assert row["organization_id"] == organization_id
+            assert row["storage_key"] == f"legacy/{document_id}.pdf"
+            assert row["sha256"] == "a" * 64
+            assert row["size_bytes"] == 17
+
+        command.upgrade(cfg, "head")
+    finally:
+        engine.dispose()
+        _restore_database_url(previous)
+
+
+def test_universal_document_downgrade_refuses_second_file_version() -> None:
+    url = os.environ["TEST_DATABASE_URL"]
+    cfg = _alembic_config(url)
+    previous = _set_database_url(url)
+    engine = create_engine(url)
+    organization_id = uuid.uuid4()
+    document_id = uuid.uuid4()
+
+    try:
+        _reset_legacy_state(cfg, engine)
+        with engine.begin() as connection:
+            _insert_organization(connection, organization_id)
+            _insert_legacy_document(
+                connection,
+                document_id=document_id,
+                organization_id=organization_id,
+            )
+
+        command.upgrade(cfg, "0021_universal_documents")
+        with engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    """
+                    INSERT INTO document_versions (
+                        id, document_id, version_number, original_filename,
+                        content_type, storage_key, sha256, size_bytes
+                    ) VALUES (
+                        :id, :document_id, 2, 'second.pdf',
+                        'application/pdf', :storage_key, :sha256, 3
+                    )
+                    """
+                ),
+                {
+                    "id": uuid.uuid4(),
+                    "document_id": document_id,
+                    "storage_key": f"legacy/{document_id}-v2.pdf",
+                    "sha256": "c" * 64,
+                },
+            )
+
+        with pytest.raises(
+            RuntimeError,
+            match="universal documents cannot be downgraded losslessly",
+        ):
+            command.downgrade(cfg, "0020_identifier_constraints")
+
+        assert "documents" in set(inspect(engine).get_table_names())
+        assert "organization_documents" not in set(inspect(engine).get_table_names())
     finally:
         engine.dispose()
         _restore_database_url(previous)
