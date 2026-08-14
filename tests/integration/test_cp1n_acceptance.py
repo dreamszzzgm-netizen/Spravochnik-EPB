@@ -653,3 +653,184 @@ def test_identifier_replacement_is_atomic(
     assert IdentifierType.OGRN in types
     assert IdentifierType.KPP not in types
     assert len(idents) == 2
+
+
+# --- Parent search scope and type tests ---
+
+
+def test_branch_appears_in_parent_search(
+    db: Session, service: OrganizationService, actor: User
+) -> None:
+    """Branch organizations are returned in parent search results."""
+    legal = service.create_organization(
+        db,
+        actor_id=actor.id,
+        legal_name="Legal Root",
+        short_name="LR",
+        organization_type=OrganizationType.LEGAL_ENTITY,
+        parent_id=None,
+    )
+    branch = service.create_organization(
+        db,
+        actor_id=actor.id,
+        legal_name="Branch Parent",
+        short_name="BP",
+        organization_type=OrganizationType.BRANCH,
+        parent_id=legal.id,
+    )
+
+    from app.database.session import get_db
+    from app.main import app
+    from app.modules.identity.dependencies import get_current_user
+
+    def _override_db():
+        yield db
+
+    def _override_user():
+        return actor
+
+    app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[get_current_user] = _override_user
+    with TestClient(app, raise_server_exceptions=False) as c:
+        response = c.get("/api/organizations/search?q=Branch")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    ids = [item["id"] for item in response.json()]
+    assert str(branch.id) in ids
+
+
+def test_search_respects_related_scope(
+    db: Session, service: OrganizationService, actor: User
+) -> None:
+    """Scoped user sees only organizations in their related_organization_ids."""
+    from app.modules.identity.authorization import AuthorizationContext
+    from app.modules.organizations.repository import list_organizations_paginated
+
+    visible = service.create_organization(
+        db,
+        actor_id=actor.id,
+        legal_name="Visible Org",
+        short_name="VO",
+        organization_type=OrganizationType.LEGAL_ENTITY,
+        parent_id=None,
+    )
+    hidden = service.create_organization(
+        db,
+        actor_id=actor.id,
+        legal_name="Hidden Org",
+        short_name="HO",
+        organization_type=OrganizationType.LEGAL_ENTITY,
+        parent_id=None,
+    )
+
+    scoped_ctx = AuthorizationContext(
+        user_id=actor.id,
+        employee_id=actor.employee_id,
+        permission_code="organizations.view",
+        is_superuser=False,
+        has_all_scope=False,
+        related_organization_ids=frozenset({visible.id}),
+        active_scope_types=frozenset(),
+    )
+
+    from app.database.session import get_db
+    from app.main import app
+    from app.modules.identity.dependencies import get_current_user
+
+    def _override_db():
+        yield db
+
+    def _override_user():
+        return actor
+
+    app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[get_current_user] = _override_user
+
+    items, _total = list_organizations_paginated(
+        db, q="Org", authorization=scoped_ctx
+    )
+
+    app.dependency_overrides.clear()
+
+    ids = [str(item.id) for item in items]
+    assert str(visible.id) in ids
+    assert str(hidden.id) not in ids
+
+
+def test_search_excludes_deleted_organizations(
+    db: Session, service: OrganizationService, actor: User
+) -> None:
+    """Soft-deleted organizations never appear in parent search."""
+    deleted = service.create_organization(
+        db,
+        actor_id=actor.id,
+        legal_name="About to Die",
+        short_name="AD",
+        organization_type=OrganizationType.LEGAL_ENTITY,
+        parent_id=None,
+    )
+    service.delete_organization(db, actor_id=actor.id, organization=deleted)
+
+    from app.database.session import get_db
+    from app.main import app
+    from app.modules.identity.dependencies import get_current_user
+
+    def _override_db():
+        yield db
+
+    def _override_user():
+        return actor
+
+    app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[get_current_user] = _override_user
+    with TestClient(app, raise_server_exceptions=False) as c:
+        response = c.get("/api/organizations/search?q=About")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    ids = [item["id"] for item in response.json()]
+    assert str(deleted.id) not in ids
+
+
+def test_full_scope_user_sees_all_parent_types(
+    db: Session, service: OrganizationService, actor: User
+) -> None:
+    """Superuser sees all organization types in parent search."""
+    legal = service.create_organization(
+        db,
+        actor_id=actor.id,
+        legal_name="Full LE",
+        short_name="FLE",
+        organization_type=OrganizationType.LEGAL_ENTITY,
+        parent_id=None,
+    )
+    branch = service.create_organization(
+        db,
+        actor_id=actor.id,
+        legal_name="Full Branch",
+        short_name="FB",
+        organization_type=OrganizationType.BRANCH,
+        parent_id=legal.id,
+    )
+
+    from app.database.session import get_db
+    from app.main import app
+    from app.modules.identity.dependencies import get_current_user
+
+    def _override_db():
+        yield db
+
+    def _override_user():
+        return actor
+
+    app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[get_current_user] = _override_user
+    with TestClient(app, raise_server_exceptions=False) as c:
+        response = c.get("/api/organizations/search?q=Full")
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    ids = [item["id"] for item in response.json()]
+    assert str(legal.id) in ids
+    assert str(branch.id) in ids

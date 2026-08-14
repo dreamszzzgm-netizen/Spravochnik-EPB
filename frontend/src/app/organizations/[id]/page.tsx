@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Building2, FileText, Loader2, Pencil, CheckCircle2, AlertTriangle, Landmark } from "lucide-react";
+import { ArrowLeft, Building2, FileText, Loader2, Pencil, CheckCircle2, AlertTriangle, Info, Landmark } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,13 +83,23 @@ export default function OrganizationWorkspacePage() {
         </div>
         {completeness && (
           <Badge
-            variant={completeness.status === "complete" ? "default" : "destructive"}
+            variant={
+              completeness.status === "complete"
+                ? "default"
+                : completeness.status === "needs_attention"
+                  ? "secondary"
+                  : "destructive"
+            }
             className="ml-2"
           >
-            {completeness.status === "complete" ? (
-              <><CheckCircle2 className="mr-1 h-3 w-3" />Полные реквизиты</>
-            ) : (
-              <><AlertTriangle className="mr-1 h-3 w-3" />Неполные реквизиты</>
+            {completeness.status === "complete" && (
+              <><CheckCircle2 className="mr-1 h-3 w-3" />Заполнено</>
+            )}
+            {completeness.status === "needs_attention" && (
+              <><AlertTriangle className="mr-1 h-3 w-3" />Требует внимания</>
+            )}
+            {completeness.status === "missing_required" && (
+              <><AlertTriangle className="mr-1 h-3 w-3" />Есть обязательные незаполненные поля</>
             )}
           </Badge>
         )}
@@ -202,6 +212,34 @@ export default function OrganizationWorkspacePage() {
                     <Landmark className="h-3 w-3" />Банковские реквизиты
                   </p>
                   <pre className="rounded-md bg-muted p-3 text-xs whitespace-pre-wrap">{org.bank_details}</pre>
+                </div>
+              )}
+              {completeness && completeness.missing_required_fields.length > 0 && (
+                <div className="mt-6 rounded-md border border-destructive/20 bg-destructive/5 p-4">
+                  <p className="mb-2 text-xs font-semibold uppercase text-destructive">
+                    Обязательные незаполненные поля
+                  </p>
+                  <ul className="list-inside list-disc space-y-1">
+                    {completeness.missing_required_fields.map((f) => (
+                      <li key={f.code} className="text-sm text-muted-foreground">
+                        {f.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {completeness && completeness.status === "needs_attention" && completeness.warning_fields.length > 0 && (
+                <div className="mt-4 rounded-md border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800 dark:bg-yellow-950">
+                  <p className="mb-2 text-xs font-semibold uppercase text-yellow-700 dark:text-yellow-300 flex items-center gap-1">
+                    <Info className="h-3 w-3" />Рекомендации
+                  </p>
+                  <ul className="list-inside list-disc space-y-1">
+                    {completeness.warning_fields.map((f) => (
+                      <li key={f.code} className="text-sm text-muted-foreground">
+                        {f.label}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </CardContent>

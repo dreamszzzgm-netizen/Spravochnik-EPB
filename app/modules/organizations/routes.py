@@ -233,18 +233,20 @@ def search_organizations_for_parent(
     authorization: AuthorizationContext = _dep_view,
     db: Session = Depends(get_db),
 ):
-    from sqlalchemy import or_, select
+    from sqlalchemy import false, or_, select
 
-    from app.modules.organizations.enums import OrganizationType
     from app.modules.organizations.models import Organization as OrgModel
 
     stmt = select(OrgModel).where(OrgModel.deleted_at.is_(None))
-    stmt = stmt.where(
-        OrgModel.organization_type.in_([
-            OrganizationType.LEGAL_ENTITY,
-            OrganizationType.INDIVIDUAL_ENTREPRENEUR,
-        ])
-    )
+
+    if not authorization.has_all_scope:
+        allowed_ids = authorization.related_organization_ids
+        stmt = (
+            stmt.where(OrgModel.id.in_(allowed_ids))
+            if allowed_ids
+            else stmt.where(false())
+        )
+
     if q:
         pattern = f"%{q}%"
         stmt = stmt.where(
