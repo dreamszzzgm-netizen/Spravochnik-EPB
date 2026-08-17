@@ -109,10 +109,11 @@ Feature branch: `agent/stage6-cp62-expertise-collaboration` (worktree `D:\Spravo
 - **Task ↔ Expertise**: `task_expertises` FK-backed link table (task FK CASCADE, expertise FK RESTRICT, `is_primary`), driven by the new `TaskLinkKind.EXPERTISE`. Task link access is scope-checked via `expertises.view` (fail closed on foreign expertise); `task_expertises` participates in task scope/related-organization resolution.
 - **Workflow bridge**: manual `POST /api/expertises/{id}/workflow/start` (`expertises.edit`) reuses CP5.2 `WorkflowService.instantiate`, linking generated tasks to the expertise with `TaskLinkInput(kind=EXPERTISE, is_primary=True)`. `GET /api/expertises/workflow-templates` lists templates with a published version. No second workflow engine, no generic `entity_type/entity_id`, no auto-start on create (docs only say a template *can* be applied, `BUSINESS_RULES.md §24`).
 - **Internal number**: format not confirmed in docs → **deferred**; `internal_number` stays a free-text field, no numbering service invented in CP6.2.
-- Alembic: **single head** `0018_expertise_collaboration`; linear chain `… -> 0017_expertises -> 0018_expertise_collaboration`.
-- Migration round-trip on disposable PostgreSQL port `5433`: `0018 -> 0017 -> 0018` PASS.
-- Backend regression (disposable PostgreSQL): **633 passed / 0 skipped / 0 failed**; Ruff PASS.
-- Frontend: `/expertise/new` real responsible-expert selector; `/expertise/[id]` gains Участники / Связанные задачи / Процесс blocks (permission-gated, real API, no mock-data). lint PASS, typecheck PASS, tests **88 passed**, production build PASS.
+- Integration sync (2026-08-17): current canonical integration HEAD `14b85a2587532566800a0c45b48c59f1fee12225` merged into the CP6.2 feature branch without force-push; branch is no longer behind integration.
+- Alembic: **single head target** `0021_expertise_collaboration`; linear chain `… -> 0017_expertises -> 0018_cp_n1_bank_details -> 0019_import_sessions -> 0020_identifier_constraints -> 0021_expertise_collaboration`.
+- The former CP6.2 revision `0018_expertise_collaboration` was re-numbered to `0021_expertise_collaboration` to avoid the Organizations 2.0 migration branch. Existing migration regression tests now expect `0021_expertise_collaboration`.
+- Backend pre-sync regression evidence: **633 passed / 0 skipped / 0 failed**; Ruff PASS. Fresh post-sync CI is the acceptance source for the rebased/merged branch.
+- Frontend pre-sync evidence: `/expertise/new` real responsible-expert selector; `/expertise/[id]` gains Участники / Связанные задачи / Процесс blocks (permission-gated, real API, no mock-data); lint PASS, typecheck PASS, tests **88 passed**, production build PASS. Fresh post-sync CI is the acceptance source after integration sync.
 
 ### Deferred (next CPs)
 
@@ -120,10 +121,11 @@ Inspection, NDT, defects, photos, calculations, conclusion, RTN attempts, DOCX g
 
 ### Handoff / transfer state
 
-- CP6.2 HEAD: `d0d0f7a` (`feat: add Expertise Collaboration and Workflow bridge` + `fix: map participant IntegrityError race to 409 conflict`).
-- PR **#18** «Stage 6 CP6.2 — Expertise Collaboration» → base `agent/integration-cp52-smart-import-hardening`, **Ready for review**, CI 4/4 PASS, auto-merge OFF. **Не мержить самостоятельно.**
-- Code review: P0=0, P1=0, P2=0, P3=2 (оба устранены).
-- `READY_FOR_EXPERTISE_CP63 = YES` (CP6.1 интегрирован, CP6.2 migration single head, employee selector / participants / task bridge / workflow bridge работают и покрыты security-тестами, backend 633 / frontend 88 зелёные, branch pushed, PR создан, worktree clean).
+- Integration-sync code head before this status-only commit: `db19c112e1ce8f9c7dcb32266f275b5bb32d4815`.
+- PR **#18** «Stage 6 CP6.2 — Expertise Collaboration» → base `agent/integration-cp52-smart-import-hardening`, auto-merge OFF. **Не мержить самостоятельно.**
+- PR mergeability restored after integration sync; final acceptance requires fresh CI on the current PR head.
+- Code review before integration sync: P0=0, P1=0, P2=0, P3=2 (оба устранены).
+- `READY_FOR_EXPERTISE_CP63` remains gated on fresh post-sync CI; do not advance the checkpoint solely from pre-sync evidence.
 
 
 
