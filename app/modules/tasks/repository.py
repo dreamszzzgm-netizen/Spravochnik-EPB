@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.buildings.models import Building
 from app.modules.contracts.models import Contract, ContractItem
+from app.modules.expertises.models import Expertise
 from app.modules.identity.authorization import AuthorizationContext
 from app.modules.identity.models import ScopeType
 from app.modules.opo.models import OPO
@@ -20,6 +21,7 @@ from app.modules.tasks.models import (
     TaskBuilding,
     TaskContract,
     TaskContractItem,
+    TaskExpertise,
     TaskOPO,
     TaskOrganization,
     TaskTechnicalDevice,
@@ -38,6 +40,7 @@ _LINK_SPECS = (
     ),
     (TaskLinkKind.BUILDING, TaskBuilding, TaskBuilding.building_id),
     (TaskLinkKind.OPO, TaskOPO, TaskOPO.opo_id),
+    (TaskLinkKind.EXPERTISE, TaskExpertise, TaskExpertise.expertise_id),
 )
 
 
@@ -105,6 +108,16 @@ def _related_organization_predicate(
                     OPO.owner_organization_id.in_(ids),
                     OPO.operating_organization_id.in_(ids),
                 ),
+            )
+        ),
+        sa.exists(
+            sa.select(1)
+            .select_from(TaskExpertise)
+            .join(Expertise, Expertise.id == TaskExpertise.expertise_id)
+            .join(Contract, Contract.id == Expertise.contract_id)
+            .where(
+                TaskExpertise.task_id == Task.id,
+                Contract.customer_organization_id.in_(ids),
             )
         ),
     )
@@ -227,6 +240,12 @@ def get_task_related_organization_ids(
         FROM task_opos tor
         JOIN opo o ON o.id = tor.opo_id
         WHERE tor.task_id = :task_id
+        UNION
+        SELECT c.customer_organization_id
+        FROM task_expertises te
+        JOIN expertises e ON e.id = te.expertise_id
+        JOIN contracts c ON c.id = e.contract_id
+        WHERE te.task_id = :task_id
         """
     )
     return set(db.execute(statement, {"task_id": task_id}).scalars().all())

@@ -1,9 +1,9 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.modules.expertises.enums import ExpertiseStatus
+from app.modules.expertises.enums import ExpertiseParticipantRole, ExpertiseStatus
 
 
 class ExpertiseSubjectInput(BaseModel):
@@ -88,3 +88,44 @@ class ExpertiseStatusHistoryResponse(BaseModel):
     changed_at: datetime
     changed_by: uuid.UUID
     reason: str | None
+
+
+class ExpertiseParticipantAdd(BaseModel):
+    employee_id: uuid.UUID
+    participation_role: ExpertiseParticipantRole
+
+
+class ExpertiseParticipantResponse(BaseModel):
+    id: uuid.UUID
+    expertise_id: uuid.UUID
+    employee_id: uuid.UUID
+    participation_role: ExpertiseParticipantRole
+    employee_name: str | None = None
+    position: str | None = None
+
+
+class ExpertiseTaskSummary(BaseModel):
+    id: uuid.UUID
+    title: str
+    status: str
+    priority: str
+    due_date: date | None
+    created_at: datetime
+
+
+class WorkflowStart(BaseModel):
+    workflow_template_id: uuid.UUID
+
+
+class WorkflowTemplateOption(BaseModel):
+    id: uuid.UUID
+    code: str
+    name: str
+
+
+class WorkflowStartedTask(BaseModel):
+    id: uuid.UUID
+    title: str
+    status: str
+    source_workflow_template_version_id: uuid.UUID | None
+    source_workflow_task_template_id: uuid.UUID | None

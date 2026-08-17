@@ -24,6 +24,7 @@ import {
   type ExpertiseResponse,
   type ExpertiseStatusHistoryResponse,
 } from "@/lib/api/expertises";
+import { ExpertiseCollaboration } from "./expertise-collaboration";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("ru-RU").format(new Date(value));
@@ -181,6 +182,8 @@ export function ExpertiseDetail({ expertiseId }: { expertiseId: string }) {
           </CardContent>
         </Card>
       </div>
+
+      <ExpertiseCollaboration expertiseId={expertise.id} />
 
       <Card>
         <CardHeader className="pb-3">

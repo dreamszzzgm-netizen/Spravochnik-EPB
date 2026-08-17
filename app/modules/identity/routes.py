@@ -125,6 +125,21 @@ def change_password(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.get("/employees", response_model=list[EmployeeResponse])
+def list_employees(
+    _actor: User = Depends(require_permission("employees.view")),
+    db: Session = Depends(get_db),
+):
+    employees = (
+        db.scalars(
+            select(Employee)
+            .where(Employee.deleted_at.is_(None))
+            .order_by(Employee.full_name.asc(), Employee.id.asc())
+        ).all()
+    )
+    return list(employees)
+
+
 @router.post(
     "/admin/employees", response_model=EmployeeResponse, status_code=status.HTTP_201_CREATED
 )

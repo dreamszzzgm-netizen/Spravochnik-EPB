@@ -13,15 +13,17 @@ import { ApiError } from "@/lib/api/errors";
 import { useAuth } from "@/lib/auth";
 import {
   createExpertise,
+  listBuildings,
   listContractItems,
   listContracts,
   listDevices,
-  listBuildings,
+  listEmployees,
   listExpertiseTypes,
   type BuildingOption,
   type ContractItemOption,
   type ContractOption,
   type DeviceOption,
+  type EmployeeOption,
   type ExpertiseTypeOption,
 } from "@/lib/api/expertises";
 
@@ -34,10 +36,12 @@ export default function NewExpertisePage() {
   const [expertiseTypes, setExpertiseTypes] = useState<ExpertiseTypeOption[]>([]);
   const [devices, setDevices] = useState<DeviceOption[]>([]);
   const [buildings, setBuildings] = useState<BuildingOption[]>([]);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [items, setItems] = useState<ContractItemOption[]>([]);
 
   const [contractId, setContractId] = useState("");
   const [expertiseTypeId, setExpertiseTypeId] = useState("");
+  const [responsibleExpertId, setResponsibleExpertId] = useState("");
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
   const [subjectKind, setSubjectKind] = useState<"device" | "building" | "">("");
   const [deviceId, setDeviceId] = useState("");
@@ -56,12 +60,17 @@ export default function NewExpertisePage() {
       listExpertiseTypes({ signal: controller.signal }),
       listDevices({ signal: controller.signal }),
       listBuildings({ signal: controller.signal }),
+      listEmployees({ signal: controller.signal }),
     ])
-      .then(([c, t, d, b]) => {
+      .then(([c, t, d, b, emps]) => {
         setContracts(c.items);
         setExpertiseTypes(t);
         setDevices(d.items);
         setBuildings(b.items);
+        setEmployees(emps);
+        if (employeeId && emps.some((e) => e.id === employeeId)) {
+          setResponsibleExpertId(employeeId);
+        }
       })
       .catch((caught: unknown) => {
         if (caught instanceof DOMException && caught.name === "AbortError") return;
@@ -69,7 +78,7 @@ export default function NewExpertisePage() {
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
-  }, []);
+  }, [employeeId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -104,7 +113,7 @@ export default function NewExpertisePage() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!contractId || !expertiseTypeId || !employeeId || selectedItemIds.length === 0) return;
+    if (!contractId || !expertiseTypeId || !responsibleExpertId || selectedItemIds.length === 0) return;
     const technicalDeviceId = subjectKind === "device" ? deviceId : null;
     const subjectBuildingId = subjectKind === "building" ? buildingId : null;
     if (!technicalDeviceId && !subjectBuildingId) {
@@ -117,7 +126,7 @@ export default function NewExpertisePage() {
       const created = await createExpertise({
         contract_id: contractId,
         expertise_type_id: expertiseTypeId,
-        responsible_expert_id: employeeId,
+        responsible_expert_id: responsibleExpertId,
         contract_item_ids: selectedItemIds,
         internal_number: internalNumber.trim() || undefined,
         comment: comment.trim() || undefined,
@@ -196,6 +205,24 @@ export default function NewExpertisePage() {
                 {expertiseTypes.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="responsible_expert">Ответственный эксперт *</Label>
+              <select
+                id="responsible_expert"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={responsibleExpertId}
+                onChange={(e) => setResponsibleExpertId(e.target.value)}
+                disabled={pending}
+              >
+                <option value="">Выберите сотрудника</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.full_name}
+                    {emp.position ? ` — ${emp.position}` : ""}
                   </option>
                 ))}
               </select>
@@ -300,7 +327,7 @@ export default function NewExpertisePage() {
                   pending ||
                   !contractId ||
                   !expertiseTypeId ||
-                  !employeeId ||
+                  !responsibleExpertId ||
                   selectedItemIds.length === 0
                 }
               >

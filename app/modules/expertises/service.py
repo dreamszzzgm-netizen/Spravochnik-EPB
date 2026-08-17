@@ -1,6 +1,8 @@
 import uuid
+from datetime import date, timedelta
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.buildings.models import Building
@@ -11,17 +13,22 @@ from app.modules.contracts.models import (
     ContractItemTechnicalDevice,
     ExpertiseType,
 )
+from app.modules.expertises import repository
 from app.modules.expertises.domain import INITIAL_STATUS, can_transition
-from app.modules.expertises.enums import ExpertiseStatus
+from app.modules.expertises.enums import ExpertiseParticipantRole, ExpertiseStatus
 from app.modules.expertises.models import (
     Expertise,
     ExpertiseContractItem,
+    ExpertiseParticipant,
     ExpertiseStatusHistory,
     ExpertiseSubject,
 )
 from app.modules.identity.audit import write_audit
 from app.modules.identity.models import Employee
+from app.modules.tasks.enums import TaskLinkKind
+from app.modules.tasks.service import TaskLinkInput
 from app.modules.technical_devices.models import TechnicalDevice
+from app.modules.workflows.service import WorkflowService
 
 
 class ExpertiseNotFoundError(Exception):
@@ -33,6 +40,10 @@ class ExpertiseValidationError(ValueError):
 
 
 class ExpertiseVersionConflictError(Exception):
+    pass
+
+
+class ExpertiseDuplicateParticipantError(Exception):
     pass
 
 
@@ -214,6 +225,112 @@ class ExpertiseService:
             db.rollback()
             raise
         return expertise
+
+    def add_participant(
+        self,
+        db: Session,
+        *,
+        actor_user_id: uuid.UUID,
+        expertise: Expertise,
+        employee_id: uuid.UUID,
+        participation_role: ExpertiseParticipantRole,
+    ) -> ExpertiseParticipant:
+        self._require_active_expertise(expertise)
+        self._require_active_expert(db, employee_id)
+        if repository.get_participant(db, expertise.id, employee_id) is not None:
+            raise ExpertiseDuplicateParticipantError(
+                "Сотрудник уже является участником экспертизы в этой роли"
+            )
+        participant = ExpertiseParticipant(
+            expertise_id=expertise.id,
+            employee_id=employee_id,
+            participation_role=participation_role,
+        )
+        db.add(participant)
+        try:
+            db.flush()
+            write_audit(
+                db,
+                user_id=actor_user_id,
+                action="expertise.participant_added",
+                entity_type="expertise",
+                entity_id=expertise.id,
+                summary="Добавлен участник экспертизы",
+                result="success",
+                metadata={
+                    "employee_id": str(employee_id),
+                    "participation_role": participation_role.value,
+                },
+            )
+            db.commit()
+            db.refresh(participant)
+        except IntegrityError as exc:
+            db.rollback()
+            raise ExpertiseDuplicateParticipantError(
+                "Сотрудник уже является участником экспертизы в этой роли"
+            ) from exc
+        except Exception:
+            db.rollback()
+            raise
+        return participant
+
+    def remove_participant(
+        self,
+        db: Session,
+        *,
+        actor_user_id: uuid.UUID,
+        expertise: Expertise,
+        employee_id: uuid.UUID,
+    ) -> None:
+        self._require_active_expertise(expertise)
+        participant = repository.get_participant(db, expertise.id, employee_id)
+        if participant is None:
+            raise ExpertiseValidationError("Участник не найден")
+        db.delete(participant)
+        try:
+            db.flush()
+            write_audit(
+                db,
+                user_id=actor_user_id,
+                action="expertise.participant_removed",
+                entity_type="expertise",
+                entity_id=expertise.id,
+                summary="Удалён участник экспертизы",
+                result="success",
+                metadata={"employee_id": str(employee_id)},
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+
+    def start_workflow(
+        self,
+        db: Session,
+        *,
+        actor_user_id: uuid.UUID,
+        creator_employee_id: uuid.UUID,
+        expertise: Expertise,
+        workflow_template_id: uuid.UUID,
+        anchor_date: date,
+    ) -> list:
+        self._require_active_expertise(expertise)
+        workflow_service = WorkflowService()
+        return workflow_service.instantiate(
+            db,
+            actor_user_id=actor_user_id,
+            creator_employee_id=creator_employee_id,
+            template_id=workflow_template_id,
+            anchor_date=anchor_date,
+            links=[
+                TaskLinkInput(
+                    kind=TaskLinkKind.EXPERTISE,
+                    entity_id=expertise.id,
+                    is_primary=True,
+                )
+            ],
+            due_date_resolver=lambda start, days: start + timedelta(days=days),
+        )
 
     @staticmethod
     def _check_version(expertise: Expertise, expected_version: int) -> None:

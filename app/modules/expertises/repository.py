@@ -8,11 +8,13 @@ from app.modules.expertises.enums import ExpertiseStatus
 from app.modules.expertises.models import (
     Expertise,
     ExpertiseContractItem,
+    ExpertiseParticipant,
     ExpertiseStatusHistory,
     ExpertiseSubject,
 )
 from app.modules.identity.authorization import AuthorizationContext
-from app.modules.identity.models import ScopeType
+from app.modules.identity.models import Employee, ScopeType
+from app.modules.tasks.models import Task, TaskExpertise
 
 
 def _apply_expertise_scope(
@@ -141,5 +143,69 @@ def list_expertise_status_history(
             sa.select(ExpertiseStatusHistory)
             .where(ExpertiseStatusHistory.expertise_id == expertise_id)
             .order_by(ExpertiseStatusHistory.changed_at.asc(), ExpertiseStatusHistory.id.asc())
+        ).all()
+    )
+
+
+def get_participant(
+    db: Session, expertise_id: uuid.UUID, employee_id: uuid.UUID
+) -> ExpertiseParticipant | None:
+    return db.scalar(
+        sa.select(ExpertiseParticipant).where(
+            ExpertiseParticipant.expertise_id == expertise_id,
+            ExpertiseParticipant.employee_id == employee_id,
+        )
+    )
+
+
+def list_participants(db: Session, expertise_id: uuid.UUID) -> list[ExpertiseParticipant]:
+    return list(
+        db.scalars(
+            sa.select(ExpertiseParticipant)
+            .where(ExpertiseParticipant.expertise_id == expertise_id)
+            .order_by(ExpertiseParticipant.created_at.asc(), ExpertiseParticipant.id.asc())
+        ).all()
+    )
+
+
+def list_participants_with_employees(
+    db: Session, expertise_id: uuid.UUID
+) -> list[tuple[ExpertiseParticipant, Employee | None]]:
+    rows = db.execute(
+        sa.select(ExpertiseParticipant, Employee)
+        .outerjoin(Employee, Employee.id == ExpertiseParticipant.employee_id)
+        .where(ExpertiseParticipant.expertise_id == expertise_id)
+        .order_by(ExpertiseParticipant.created_at.asc(), ExpertiseParticipant.id.asc())
+    ).all()
+    return [(participant, employee) for participant, employee in rows]
+
+
+def list_expertise_task_ids(db: Session, expertise_id: uuid.UUID) -> list[uuid.UUID]:
+    return list(
+        db.scalars(
+            sa.select(TaskExpertise.task_id)
+            .where(TaskExpertise.expertise_id == expertise_id)
+            .order_by(TaskExpertise.task_id.asc())
+        ).all()
+    )
+
+
+def list_expertise_tasks(db: Session, expertise_id: uuid.UUID) -> list[Task]:
+    return list(
+        db.scalars(
+            sa.select(Task)
+            .join(TaskExpertise, TaskExpertise.task_id == Task.id)
+            .where(TaskExpertise.expertise_id == expertise_id, Task.deleted_at.is_(None))
+            .order_by(Task.created_at.asc(), Task.id.asc())
+        ).all()
+    )
+
+
+def list_active_employees(db: Session) -> list[Employee]:
+    return list(
+        db.scalars(
+            sa.select(Employee)
+            .where(Employee.deleted_at.is_(None))
+            .order_by(Employee.full_name.asc(), Employee.id.asc())
         ).all()
     )

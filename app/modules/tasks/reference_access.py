@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.modules.buildings.models import Building
 from app.modules.contracts import repository as contract_repository
 from app.modules.contracts.models import ContractItem
+from app.modules.expertises import repository as expertise_repository
 from app.modules.identity.authorization import (
     AuthorizationContext,
     build_authorization_context,
@@ -35,6 +36,7 @@ _PERMISSION_BY_KIND = {
     TaskLinkKind.TECHNICAL_DEVICE: "technical_devices.view",
     TaskLinkKind.BUILDING: "buildings.view",
     TaskLinkKind.OPO: "opo.view",
+    TaskLinkKind.EXPERTISE: "expertises.view",
 }
 
 
@@ -151,6 +153,16 @@ def _require_link_access(
             or opo.deleted_at is not None
             or (context is not None and not can_access_opo(context, opo))
         ):
+            raise TaskReferenceAccessError
+        return
+
+    if link.kind == TaskLinkKind.EXPERTISE:
+        expertise = expertise_repository.get_expertise(
+            db,
+            link.entity_id,
+            authorization=context,
+        )
+        if expertise is None:
             raise TaskReferenceAccessError
         return
 
