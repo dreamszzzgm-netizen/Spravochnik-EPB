@@ -1,11 +1,12 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { identifierTypesFor, type OrganizationFormValues } from "@/components/organization-form-model";
-import type { IdentifierType, OrganizationType } from "@/lib/api/types";
+import type { IdentifierType, OrganizationParentSearchResult, OrganizationType } from "@/lib/api/types";
 
 const ORG_TYPES: { value: OrganizationType; label: string }[] = [
   { value: "legal_entity", label: "Юридическое лицо" },
@@ -16,13 +17,55 @@ const ORG_TYPES: { value: OrganizationType; label: string }[] = [
 interface Props {
   values: OrganizationFormValues;
   disabled: boolean;
-  setText: (field: Exclude<keyof OrganizationFormValues, "orgType" | "identifiers">, value: string) => void;
+  setText: (field: Exclude<keyof OrganizationFormValues, "orgType" | "identifiers" | "parentId">, value: string) => void;
   setType: (value: OrganizationType) => void;
   setIdentifier: (type: IdentifierType, value: string) => void;
+  setParentId: (value: string) => void;
 }
 
-export function OrganizationFormFields({ values, disabled, setText, setType, setIdentifier }: Props) {
+export function OrganizationFormFields({ values, disabled, setText, setType, setIdentifier, setParentId }: Props) {
   const isIp = values.orgType === "individual_entrepreneur";
+  const isBranch = values.orgType === "branch";
+  const [parentSearch, setParentSearch] = useState("");
+  const [parentResults, setParentResults] = useState<OrganizationParentSearchResult[]>([]);
+  const [parentLoading, setParentLoading] = useState(false);
+  const [selectedParent, setSelectedParent] = useState<OrganizationParentSearchResult | null>(null);
+
+  const searchParents = useCallback(async (q: string) => {
+    if (q.length < 2) {
+      setParentResults([]);
+      return;
+    }
+    setParentLoading(true);
+    try {
+      const res = await fetch(`/api/organizations/search?q=${encodeURIComponent(q)}&page_size=10`);
+      if (res.ok) {
+        const data = await res.json();
+        setParentResults(data);
+      }
+    } finally {
+      setParentLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => searchParents(parentSearch), 300);
+    return () => clearTimeout(timer);
+  }, [parentSearch, searchParents]);
+
+  useEffect(() => {
+    if (values.parentId && !selectedParent) {
+      fetch(`/api/organizations/${values.parentId}`)
+        .then((res) => res.ok ? res.json() : null)
+        .then((data) => {
+          if (data) {
+            setSelectedParent({ id: data.id, legal_name: data.legal_name, short_name: data.short_name, organization_type: data.organization_type });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [values.parentId, selectedParent]);
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
@@ -41,6 +84,60 @@ export function OrganizationFormFields({ values, disabled, setText, setType, set
             <SelectContent>{ORG_TYPES.map((type) => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}</SelectContent>
           </Select>
         </div>
+
+        {isBranch && (
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="parent_search">Головная организация *</Label>
+            {selectedParent ? (
+              <div className="flex items-center gap-2 rounded border p-2">
+                <span className="flex-1 text-sm">{selectedParent.legal_name}</span>
+                <button
+                  type="button"
+                  className="text-sm text-destructive hover:underline"
+                  onClick={() => {
+                    setSelectedParent(null);
+                    setParentId("");
+                    setParentSearch("");
+                  }}
+                  disabled={disabled}
+                >
+                  Убрать
+                </button>
+              </div>
+            ) : (
+              <>
+                <Input
+                  id="parent_search"
+                  value={parentSearch}
+                  onChange={(e) => setParentSearch(e.target.value)}
+                  placeholder="Введите для поиска..."
+                  disabled={disabled}
+                />
+                {parentLoading && <p className="text-xs text-muted-foreground">Поиск...</p>}
+                {parentResults.length > 0 && (
+                  <div className="rounded border bg-popover text-sm max-h-48 overflow-y-auto">
+                    {parentResults.map((org) => (
+                      <button
+                        key={org.id}
+                        type="button"
+                        className="w-full px-3 py-2 text-left hover:bg-accent hover:text-accent-foreground"
+                        onClick={() => {
+                          setSelectedParent(org);
+                          setParentId(org.id);
+                          setParentSearch("");
+                          setParentResults([]);
+                        }}
+                      >
+                        {org.legal_name}
+                        {org.short_name ? ` (${org.short_name})` : ""}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {isIp ? (
           <>
@@ -75,6 +172,11 @@ export function OrganizationFormFields({ values, disabled, setText, setType, set
             </div>
           ))}
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="bank_details">Банковские реквизиты</Label>
+        <Textarea id="bank_details" value={values.bankDetails} onChange={(e) => setText("bankDetails", e.target.value)} rows={3} maxLength={5000} disabled={disabled} />
       </div>
 
       <div className="space-y-2">

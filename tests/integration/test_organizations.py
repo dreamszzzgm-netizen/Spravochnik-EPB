@@ -120,9 +120,9 @@ def test_organization_family_chain(db: Session, service: OrganizationService, ac
     child = service.create_organization(
         db,
         actor_id=actor.id,
-        legal_name="AO Primer",
+        legal_name="Filial Primer",
         short_name="Primer",
-        organization_type=OrganizationType.LEGAL_ENTITY,
+        organization_type=OrganizationType.BRANCH,
         parent_id=parent.id,
     )
     assert child.parent_id == parent.id
@@ -135,9 +135,9 @@ def test_create_organization_rejects_missing_parent(
         service.create_organization(
             db,
             actor_id=actor.id,
-            legal_name="OOO Ghost",
+            legal_name="Filial Ghost",
             short_name=None,
-            organization_type=OrganizationType.LEGAL_ENTITY,
+            organization_type=OrganizationType.BRANCH,
             parent_id=uuid.uuid4(),
         )
 

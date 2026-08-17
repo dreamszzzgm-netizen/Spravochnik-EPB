@@ -4,6 +4,7 @@ export interface OrganizationFormValues {
   legalName: string;
   shortName: string;
   orgType: OrganizationType;
+  parentId: string;
   legalAddress: string;
   actualAddress: string;
   residenceAddress: string;
@@ -12,6 +13,7 @@ export interface OrganizationFormValues {
   phone: string;
   email: string;
   comment: string;
+  bankDetails: string;
   identifiers: Partial<Record<IdentifierType, string>>;
 }
 
@@ -19,6 +21,7 @@ export const EMPTY_ORGANIZATION_FORM: OrganizationFormValues = {
   legalName: "",
   shortName: "",
   orgType: "legal_entity",
+  parentId: "",
   legalAddress: "",
   actualAddress: "",
   residenceAddress: "",
@@ -27,6 +30,7 @@ export const EMPTY_ORGANIZATION_FORM: OrganizationFormValues = {
   phone: "",
   email: "",
   comment: "",
+  bankDetails: "",
   identifiers: {},
 };
 
@@ -36,6 +40,7 @@ export function identifierTypesFor(type: OrganizationType): IdentifierType[] {
 
 export function buildOrganizationPayload(values: OrganizationFormValues): OrganizationCreatePayload {
   const isIp = values.orgType === "individual_entrepreneur";
+  const isBranch = values.orgType === "branch";
   const identifiers = identifierTypesFor(values.orgType)
     .filter((type) => values.identifiers[type]?.trim())
     .map((type) => ({
@@ -47,6 +52,7 @@ export function buildOrganizationPayload(values: OrganizationFormValues): Organi
     legal_name: values.legalName.trim(),
     short_name: values.shortName.trim() || null,
     organization_type: values.orgType,
+    parent_id: isBranch && values.parentId ? values.parentId : null,
     legal_address: isIp ? null : values.legalAddress.trim() || null,
     actual_address: isIp ? null : values.actualAddress.trim() || null,
     residence_address: isIp ? values.residenceAddress.trim() || null : null,
@@ -55,6 +61,7 @@ export function buildOrganizationPayload(values: OrganizationFormValues): Organi
     phone: values.phone.trim() || null,
     email: values.email.trim() || null,
     comment: values.comment.trim() || null,
+    bank_details: values.bankDetails.trim() || null,
     identifiers,
   };
 }

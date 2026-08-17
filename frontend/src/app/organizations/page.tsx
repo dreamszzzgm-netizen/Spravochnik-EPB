@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Building2, ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { Building2, ChevronLeft, ChevronRight, FileSpreadsheet, Plus, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -29,6 +29,7 @@ export default function OrganizationsPage() {
   const [total, setTotal] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const canCreate = useCan("organizations.create");
+  const canImport = useCan("organizations.import");
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -83,6 +84,14 @@ export default function OrganizationsPage() {
             <Link href="/organizations/new">
               <Plus className="mr-1.5 h-4 w-4" />
               Новая организация
+            </Link>
+          </Button>
+        )}
+        {canImport && (
+          <Button size="sm" variant="outline" asChild>
+            <Link href="/organizations/import">
+              <FileSpreadsheet className="mr-1.5 h-4 w-4" />
+              Импорт Excel
             </Link>
           </Button>
         )}
